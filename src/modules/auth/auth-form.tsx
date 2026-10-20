@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CircleAlert, Eye, EyeOff, Info } from "lucide-react";
@@ -130,7 +131,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           <div className="auth-label-row">
             <FieldLabel htmlFor="password">Password</FieldLabel>
             {mode === "login" && (
-              <button type="button" className="auth-link" onClick={() => setNotice("Password reset isn’t available yet.")}>Forgot password?</button>
+              <Link className="auth-link" href="/forgot-password">Forgot password?</Link>
             )}
           </div>
           <InputGroup className="h-10">

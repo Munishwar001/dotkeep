@@ -105,6 +105,6 @@ src/modules/auth/verify-email-button.tsx
 
 ## 8. Abhi nahi hai
 
-Unverified accounts ko X din baad apne aap delete karna, email badalna (ab possible hai par alag kaam), aur password reset (wo bhi isi email system par banega).
+Unverified accounts ko X din baad apne aap delete karna, aur email badalna (ab possible hai par alag kaam). Password reset ban chuka hai: [PASSWORD_RESET_FLOW.md](PASSWORD_RESET_FLOW.md).
 
 **Test:** asli MongoDB, asli nodemailer aur ek **nakli SMTP server** ke saath (mail kahin bahar nahi gayi): API ke 70+ checks aur Chrome me poora flow, sab pass. Asli email service (Gmail, Brevo wagairah) ke saath tumhe ek baar khud try karna hoga.

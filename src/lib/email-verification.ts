@@ -1,9 +1,7 @@
 import type { ObjectId } from "mongodb";
 import { cancelVerifications, createVerification, VERIFICATION_HOURS } from "@/db/email-verifications";
 import { appUrl, sendMail } from "./mail";
-
-const escapeHtml = (value: string) =>
-  value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+import { actionEmailHtml } from "./mail-html";
 
 export type SendResult = "sent" | "cooldown" | "failed";
 
@@ -20,26 +18,16 @@ export async function sendVerificationEmail(user: { _id: ObjectId; name: string;
   try {
     const link = `${appUrl()}/verify-email?token=${encodeURIComponent(created.token)}`;
     const name = user.name.trim() || "there";
-    const text = [
-      `Hi ${name},`,
-      "",
-      "Confirm your email address to finish setting up your Dotkeep account:",
-      "",
-      link,
-      "",
-      `This link works once and expires in ${VERIFICATION_HOURS} hours. If you didn't create a Dotkeep account, you can ignore this email.`,
-    ].join("\n");
+    const intro = "Confirm your email address to finish setting up your Dotkeep account.";
+    const outro = `This link works once and expires in ${VERIFICATION_HOURS} hours. If you didn't create a Dotkeep account, you can ignore this email.`;
+    const text = [`Hi ${name},`, "", intro, "", link, "", outro].join("\n");
 
-    // The name is typed by the person signing up, so it is escaped before it goes into HTML.
-    const html = `<div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;color:#0b1b33;line-height:1.6">
-  <p>Hi ${escapeHtml(name)},</p>
-  <p>Confirm your email address to finish setting up your Dotkeep account.</p>
-  <p><a href="${escapeHtml(link)}" style="display:inline-block;background:#1f4fd8;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px;font-weight:600">Verify my email</a></p>
-  <p style="font-size:13px;color:#5b6478">Or copy this link into your browser:<br>${escapeHtml(link)}</p>
-  <p style="font-size:13px;color:#5b6478">This link works once and expires in ${VERIFICATION_HOURS} hours. If you didn't create a Dotkeep account, you can ignore this email.</p>
-</div>`;
-
-    await sendMail({ to: user.email, subject: "Verify your email for Dotkeep", text, html });
+    await sendMail({
+      to: user.email,
+      subject: "Verify your email for Dotkeep",
+      text,
+      html: actionEmailHtml({ name, intro, buttonLabel: "Verify my email", url: link, outro }),
+    });
     return "sent";
   } catch (error) {
     console.error("verification email failed", error instanceof Error ? error.message : error);

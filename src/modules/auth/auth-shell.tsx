@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Mark } from "@/modules/landing/icons";
 
-type Mode = "login" | "signup" | "verify";
+type Mode = "login" | "signup" | "verify" | "forgot" | "reset";
 
 const copy = {
   login: {
@@ -11,6 +11,20 @@ const copy = {
     switchText: "New to Dotkeep?",
     switchLabel: "Create an account",
     switchHref: "/signup",
+  },
+  forgot: {
+    title: "Reset your password",
+    text: "Enter your email and we’ll send you a link to choose a new one.",
+    switchText: "Remembered it?",
+    switchLabel: "Sign in",
+    switchHref: "/login",
+  },
+  reset: {
+    title: "Choose a new password",
+    text: "Pick a strong password you haven’t used before.",
+    switchText: "Changed your mind?",
+    switchLabel: "Back to sign in",
+    switchHref: "/login",
   },
   verify: {
     title: "Verify your email",

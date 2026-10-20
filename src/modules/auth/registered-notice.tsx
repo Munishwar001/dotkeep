@@ -8,10 +8,14 @@ import { CircleAlert, CircleCheck } from "lucide-react";
  *   ?registered=1          just signed up, verification email sent
  *   ?registered=1&mail=0   just signed up, but the email could not be sent
  *   ?verified=1            just confirmed the email
+ *   ?reset=1               just chose a new password
  */
 export function RegisteredNotice() {
   const params = useSearchParams();
 
+  if (params.get("reset") === "1") {
+    return <Note>Password updated. Sign in with your new password.</Note>;
+  }
   if (params.get("verified") === "1") {
     return <Note>Email verified. You can sign in now.</Note>;
   }
