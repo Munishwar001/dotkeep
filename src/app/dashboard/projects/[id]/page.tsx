@@ -47,7 +47,7 @@ async function ProjectContent({ params }: { params: Promise<{ id: string }> }) {
           text={project.description || undefined}
           actions={<ProjectActions project={project} redirectTo="/dashboard/projects" />}
         />
-        <SecretsTable secrets={secrets} projects={projects.map(({ id, name }) => ({ id, name }))} fixedProjectId={project.id} />
+        <SecretsTable secrets={secrets} projects={projects.map(({ id, name }) => ({ id, name }))} fixedProjectId={project.id} revealSeconds={user.revealSeconds} />
       </main>
     </>
   );

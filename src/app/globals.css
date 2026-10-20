@@ -480,3 +480,48 @@ a.dash-tile { display: block; }
   .ad-count { display: none; }
   .ad-search { flex-wrap: wrap; }
 }
+
+/* ---------- Settings ---------- */
+.st-stack { display: grid; gap: 24px; max-width: 920px; }
+.st-section { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 24px 56px; align-items: start; padding: 36px 40px; }
+.st-section h2 { margin: 0; font-size: 16px; font-weight: 600; letter-spacing: -.25px; color: var(--ink); }
+.st-section-text { margin: 8px 0 0; color: #5b6478; font-size: 13px; line-height: 1.65; }
+.st-section-body { max-width: 440px; min-width: 0; }
+.st-section-body.is-wide { max-width: none; }
+.st-section-body [data-slot="field-group"] { gap: 24px; }
+.st-section-body [data-slot="field"] { gap: 8px; }
+.st-section.is-danger { border-color: #f1c4c2; background: #fffafa; }
+.st-section.is-danger h2 { color: #8f2a26; }
+.st-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-top: 4px; }
+.st-hint { margin: 0; color: #8a91a3; font-size: 12px; }
+.st-select { min-width: 160px; }
+.st-note { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; }
+.st-note svg { width: 15px; height: 15px; flex: none; }
+.st-note.is-ok { color: #1d6b49; }
+.st-note.is-error { color: #8f2a26; }
+
+.st-sessions { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.st-sessions li { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-top: 1px solid var(--line); }
+.st-sessions li:first-child { border-top: 0; }
+.st-session-icon { display: grid; place-items: center; flex: none; width: 36px; height: 36px; border-radius: 10px; background: #eef3fe; color: var(--brand); }
+.st-session-icon svg { width: 17px; height: 17px; }
+.st-session-main { flex: 1; min-width: 0; }
+.st-session-main b { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; font-weight: 580; color: var(--ink); }
+.st-session-main small { display: block; margin-top: 3px; color: #6b7388; font-size: 12px; }
+.st-badge { font: normal 9.5px var(--font-geist-mono), monospace; letter-spacing: .4px; text-transform: uppercase; color: #1d6b49; border: 1px solid #bfe3d0; background: #f1faf5; border-radius: 20px; padding: 2px 8px; }
+.st-sessions-foot { margin-top: 14px; }
+.st-sessions-foot:empty { display: none; }
+
+/* Navigation links in the user menu are only needed when the sidebar is hidden */
+@media (min-width: 901px) { .dash-menu-nav { display: none; } }
+@media (max-width: 640px) {
+  /* The device text gets the full row; the Sign out button drops below it, lined up with the text. */
+  .st-sessions li { flex-wrap: wrap; row-gap: 12px; }
+  .st-session-main { flex: 1 1 calc(100% - 52px); }
+  .st-sessions li > button { margin-left: 50px; }
+}
+
+@media (max-width: 800px) {
+  .st-section { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 26px 22px; }
+  .st-section-body, .st-section-body.is-wide { max-width: none; }
+}

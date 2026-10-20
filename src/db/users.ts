@@ -9,6 +9,7 @@
  */
 import type { Collection, ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
+import { REVEAL_SECONDS } from "@/modules/vault/constants";
 import { recordLoginEvent } from "./login-events";
 
 /** One document in the `users` collection, exactly as it is stored. */
@@ -22,6 +23,7 @@ export type UserDoc = {
   role?: Role; // missing = "user". Only the make-admin script can set "admin".
   lastLoginAt?: Date;
   loginCount?: number;
+  revealSeconds?: number; // Settings -> Vault preference. Missing = REVEAL_SECONDS.
 };
 
 export type Role = "user" | "admin";
@@ -30,7 +32,7 @@ export type Role = "user" | "admin";
 export type NewUser = { name: string; email: string; passwordHash: string };
 
 /** A user that is safe to send to the browser: no password hash. */
-export type PublicUser = { id: string; name: string; email: string; role: Role; createdAt: Date };
+export type PublicUser = { id: string; name: string; email: string; role: Role; revealSeconds: number; createdAt: Date };
 
 /** Thrown by createUser() when the email is already registered. */
 export class EmailTakenError extends Error {
@@ -49,7 +51,7 @@ export function normalizeEmail(email: string) {
 
 /** Strips the password hash. Always use this before returning a user to the browser. */
 export function toPublicUser(user: UserDoc): PublicUser {
-  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", createdAt: user.createdAt };
+  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", revealSeconds: user.revealSeconds ?? REVEAL_SECONDS, createdAt: user.createdAt };
 }
 
 // The unique index on `email` is what really stops two accounts with the same email, even if two
