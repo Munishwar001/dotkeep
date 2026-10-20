@@ -1,0 +1,34 @@
+/** Shared by the server (validation) and the browser (forms, filters). Keep this file free of server-only imports. */
+
+export const ENVIRONMENTS = [
+  { value: "local", label: "Local" },
+  { value: "staging", label: "Staging" },
+  { value: "production", label: "Production" },
+] as const;
+
+export const SECRET_TYPES = [
+  { value: "api_key", label: "API key" },
+  { value: "access_token", label: "Access token" },
+  { value: "webhook_url", label: "Webhook URL" },
+  { value: "database_url", label: "Database URL" },
+  { value: "env_variable", label: "Environment variable" },
+  { value: "other", label: "Other" },
+] as const;
+
+export type Environment = (typeof ENVIRONMENTS)[number]["value"];
+export type SecretType = (typeof SECRET_TYPES)[number]["value"];
+
+export const LIMITS = {
+  projects: 100, // per user
+  secrets: 1000, // per user
+  projectName: 60,
+  projectDescription: 280,
+  secretName: 80,
+  secretValue: 10_000,
+} as const;
+
+/** A revealed value hides itself again after this many seconds. */
+export const REVEAL_SECONDS = 15;
+
+export const environmentLabel = (value: string) => ENVIRONMENTS.find((e) => e.value === value)?.label ?? value;
+export const secretTypeLabel = (value: string) => SECRET_TYPES.find((t) => t.value === value)?.label ?? value;

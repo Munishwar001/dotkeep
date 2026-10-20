@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Eye, EyeOff, Info } from "lucide-react";
+import { CircleAlert, Eye, EyeOff, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -36,11 +36,14 @@ function strength(password: string) {
 }
 
 export function AuthForm({ mode }: { mode: Mode }) {
+  const router = useRouter();
   const [values, setValues] = useState<Values>({ name: "", email: "", password: "" });
   const [touched, setTouched] = useState<Partial<Record<keyof Values, boolean>>>({});
   const [submitted, setSubmitted] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
 
   const errors = validate(mode, values);
   const visible = (field: keyof Values) => (touched[field] || submitted ? errors[field] : undefined);
@@ -49,26 +52,43 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const set = (field: keyof Values) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setValues((prev) => ({ ...prev, [field]: event.target.value }));
     setNotice(null);
+    setFormError(null);
   };
   const blur = (field: keyof Values) => () => setTouched((prev) => ({ ...prev, [field]: true }));
 
-  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-    // Intentionally no network call: accounts are not live yet, so nothing is sent or stored.
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (pending) return; // ignore double clicks
     setSubmitted(true);
-    if (Object.keys(errors).length > 0) {
-      setNotice(null);
-      return;
+    setNotice(null);
+    setFormError(null);
+    if (Object.keys(errors).length > 0) return;
+
+    setPending(true);
+    try {
+      const response = await fetch(mode === "signup" ? "/api/auth/signup" : "/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(mode === "signup" ? values : { email: values.email, password: values.password }),
+      });
+
+      if (response.ok) {
+        // Success: the server has set the session cookie. Go to the dashboard.
+        router.push("/dashboard");
+        router.refresh();
+        return; // keep the button disabled while the page changes
+      }
+
+      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      setFormError(data?.error ?? "Something went wrong. Please try again.");
+    } catch {
+      setFormError("We couldn’t reach the server. Check your connection and try again.");
     }
-    setNotice(
-      mode === "signup"
-        ? "Dotkeep isn’t open for sign-ups yet. Nothing was sent or saved — this page shows where your account will be created."
-        : "Sign-in isn’t available yet because accounts aren’t live. Nothing was sent or saved.",
-    );
+    setPending(false);
   }
 
   return (
-    <form className="auth-form" onSubmit={onSubmit} noValidate>
+    <form className="auth-form" onSubmit={onSubmit} noValidate aria-busy={pending}>
       <FieldGroup>
         {mode === "signup" && (
           <Field data-invalid={!!visible("name")}>
@@ -88,7 +108,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           <div className="auth-label-row">
             <FieldLabel htmlFor="password">Password</FieldLabel>
             {mode === "login" && (
-              <button type="button" className="auth-link" onClick={() => setNotice("Password reset isn’t available yet because accounts aren’t live.")}>Forgot password?</button>
+              <button type="button" className="auth-link" onClick={() => setNotice("Password reset isn’t available yet.")}>Forgot password?</button>
             )}
           </div>
           <InputGroup className="h-10">
@@ -108,12 +128,16 @@ export function AuthForm({ mode }: { mode: Mode }) {
           )}
         </Field>
 
+        {formError && (
+          <div className="auth-alert" role="alert"><CircleAlert aria-hidden="true" /><p>{formError}</p></div>
+        )}
         {notice && (
           <div className="auth-notice" role="status"><Info aria-hidden="true" /><p>{notice}</p></div>
         )}
 
-        <Button type="submit" size="lg" className="h-11 w-full text-[13px]">{mode === "signup" ? "Create account" : "Sign in"}</Button>
-        <p className="auth-fineprint">Accounts aren’t live yet, so nothing you enter here is submitted. <Link href="/#faq">Learn more</Link></p>
+        <Button type="submit" size="lg" className="h-11 w-full text-[13px]" disabled={pending}>
+          {pending ? (mode === "signup" ? "Creating account…" : "Signing in…") : mode === "signup" ? "Create account" : "Sign in"}
+        </Button>
       </FieldGroup>
     </form>
   );
