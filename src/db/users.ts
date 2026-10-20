@@ -87,3 +87,9 @@ export async function findUserByEmail(email: string): Promise<UserDoc | null> {
   const users = await usersCollection();
   return users.findOne({ email: normalizeEmail(email) });
 }
+
+/** Finds a user by id, or returns null. Used to turn a session into a user. */
+export async function findUserById(id: ObjectId): Promise<UserDoc | null> {
+  const users = await usersCollection();
+  return users.findOne({ _id: id });
+}

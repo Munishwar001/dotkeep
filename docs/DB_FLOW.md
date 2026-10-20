@@ -31,6 +31,7 @@ Rule: **har layer sirf apne neeche wali layer se baat karti hai.** Isse code sam
 |---|---|---|
 | [src/lib/mongodb.ts](../src/lib/mongodb.ts) | Connection kholta hai (`MONGODB_URI` se) aur use reuse karta hai | Phone line |
 | [src/db/users.ts](../src/db/users.ts) | User ka shape batata hai, aur user save/find karta hai | Phone book |
+| [src/lib/password.ts](../src/lib/password.ts) | Password ka hash banata hai aur match karta hai | Tala aur chaabi |
 | [src/app/api/health/db/route.ts](../src/app/api/health/db/route.ts) | Check karta hai ki database zinda hai | "Hello, koi hai?" |
 
 ---
@@ -149,18 +150,138 @@ Connection check karne ke liye: `npm run dev` chalao aur `http://localhost:3000/
 
 ---
 
-## 10. Abhi kya hai, aage kya
+## 10. Password hashing ([password.ts](../src/lib/password.ts))
+
+**Hash kya hota hai?** Password ko ek aisi lambi string me badalna jisse **wapas asli password nahi nikal sakta**. Database me sirf wahi string rakhte hain. Database leak bhi ho jaye to attacker ko password nahi, sirf hash milta hai.
+
+**Do functions:**
+| Function | Kaam | Kab |
+|---|---|---|
+| `hashPassword(password)` | Password se hash banata hai | **Signup** par, `createUser` se pehle |
+| `verifyPassword(password, hash)` | Batata hai password sahi hai ya nahi (true/false) | **Login** par |
+
+**Hash ek string me aisa dikhta hai:**
+```
+scrypt$32768$8$3$<salt>$<hash>
+  │      │   │ │    │      └ asli hash
+  │      │   │ │    └ salt (random, har user ka alag)
+  │      └───┴─┴ settings (kitna mehnat karna hai)
+  └ algorithm ka naam
+```
+Settings hash ke andar hi likhi hoti hain. Isliye baad me settings badal bhi do, to purane users ke hash bhi verify honge.
+
+**Kyun scrypt?** Ye jaanbujhkar **dheema aur memory-bhukha** banaya gaya hai (ek hash me lagbhag 140ms aur 32 MiB memory). Real user ko farak nahi padta, par attacker ko lakhon password guess karne me bahut der lagti hai. Ye Node ke andar hi aata hai, koi extra package nahi.
+
+**Salt kya hai?** Har password ke saath ek random string judti hai. Isse do users ka same password hone par bhi hash alag aate hain. Attacker pehle se bani hui hash-lists (rainbow tables) use nahi kar sakta.
+
+**Teen chhoti suraksha:**
+1. **Max 128 characters.** Koi bahut lamba password bhej ke server ko atka na sake.
+2. **Unicode normalize.** `é` ko do alag tareekon se type karo to bhi same maana jata hai.
+3. **Unknown email par bhi utna hi time.** `verifyPassword(password, null)` ek dummy hash se utna hi kaam karta hai. Isse timing dekh ke koi nahi jaan sakta ki email registered hai ya nahi.
+
+**Signup aur login me kaise lagega (agle step)**
+```ts
+// Signup
+const passwordHash = await hashPassword(password);
+await createUser({ name, email, passwordHash });
+
+// Login
+const user = await findUserByEmail(email);
+const ok = await verifyPassword(password, user?.passwordHash ?? null);
+// ok false ho to hamesha wahi message: "Incorrect email or password."
+```
+
+---
+
+## 11. Poora flow: Signup, Login, Dashboard, Logout
+
+### Session kya hai?
+Login ke baad browser ko ek **cookie** milti hai (`dotkeep_session`). Har request ke saath ye cookie jaati hai, aur server pehchanta hai ki "ye wahi user hai". Cookie me ek **random token** hota hai.
+
+Database ki `sessions` collection me token **ka hash** save hota hai, asli token nahi ([sessions.ts](../src/db/sessions.ts)). Isliye database leak ho jaye to bhi koi cookie nakal nahi kar sakta.
+
+```json
+{ "tokenHash": "9f2c…(64 chars)", "userId": "…", "createdAt": "…", "expiresAt": "7 din baad" }
+```
+7 din baad session apne aap expire hota hai, aur MongoDB use khud delete kar deta hai (TTL index).
+
+### Signup
+```
+Form (auth-form.tsx)  ── POST /api/auth/signup { name, email, password } ──►  signup/route.ts
+   1. Origin + JSON check (CSRF se bachav)
+   2. Rate limit (ek IP se ghante me 10 signup)
+   3. parseSignup()      → server par dobara validation
+   4. hashPassword()     → password.ts
+   5. createUser()       → users collection me save (duplicate email → 409)
+   6. createSession()    → sessions collection me token-hash save
+   7. Response + Set-Cookie: dotkeep_session=<token>
+Form: response ok  →  router.push("/dashboard")
+```
+
+### Login
+```
+Form ── POST /api/auth/login { email, password } ──►  login/route.ts
+   1. Origin + JSON check
+   2. parseLogin()
+   3. Rate limit (IP + email par 15 minute me 10 koshish)
+   4. findUserByEmail()  → users collection
+   5. verifyPassword(password, user?.passwordHash ?? null)
+   6. galat ya user nahi mila → 401 "Incorrect email or password."  (dono me same message)
+   7. sahi → createSession() + Set-Cookie
+Form: response ok  →  router.push("/dashboard")   ← login ke baad dashboard
+```
+
+### Dashboard
+```
+Browser: GET /dashboard
+   proxy.ts            cookie hai? nahi → /login par bhejo        (tez check)
+   dashboard/page.tsx  getCurrentUser()
+        └─ cookie ka token → hash → sessions me dhundo → userId → users me user
+        └─ session nahi mila / expire → /login
+        └─ mil gaya → "Welcome, <naam>" dikhao
+```
+
+### Logout
+```
+Sign out button ── POST /api/auth/logout ──► sessions se token-hash delete + cookie saaf
+→ router.push("/login")
+```
+Session database se delete hota hai, to purani cookie kisi bhi device par ab kaam nahi karti.
+
+### Suraksha jo laagi hai
+| Cheez | Kaise |
+|---|---|
+| Password | scrypt hash, asli password kahin nahi |
+| Cookie | `HttpOnly` (JavaScript padh nahi sakta), `SameSite=Lax`, production me `Secure` |
+| CSRF | Origin check + sirf JSON |
+| Brute force | Login par rate limit, signup par rate limit |
+| Email enumeration | Login me galat password aur unknown email ka message aur time same |
+| Server validation | Browser ke checks par bharosa nahi, server dobara check karta hai |
+
+**Rate limit ki seema:** ye memory me hai, to server restart par reset ho jata hai. Agar kabhi ek se zyada server chalao, to ise MongoDB ya Redis me le jana padega.
+
+---
+
+## 12. Abhi kya hai, aage kya
 
 **Abhi bana hai**
 - [x] MongoDB connection ([mongodb.ts](../src/lib/mongodb.ts))
 - [x] Connection check ([/api/health/db](../src/app/api/health/db/route.ts))
 - [x] Users ka shape + save/find ([users.ts](../src/db/users.ts))
+- [x] Password hashing ([password.ts](../src/lib/password.ts))
 
-**Abhi nahi bana (agle steps, is order me)**
-1. **Password hashing:** password ka hash banana aur match karna. Alag chhoti file me.
-2. **Signup route:** form ka data → hash → `createUser`.
-3. **Login route:** `findUserByEmail` → hash match.
-4. **Session:** login ke baad cookie, taaki user logged-in rahe.
-5. **Forms ko routes se jodna**, aur `/dashboard` ko protect karna.
+**Ab tak bana**
+- [x] MongoDB connection, health check
+- [x] Users collection ([users.ts](../src/db/users.ts)) aur password hashing ([password.ts](../src/lib/password.ts))
+- [x] Sessions ([sessions.ts](../src/db/sessions.ts)) aur cookie ([session.ts](../src/lib/session.ts))
+- [x] Signup, Login, Logout routes ([src/app/api/auth/](../src/app/api/auth/))
+- [x] Forms routes se jude hain, login/signup ke baad `/dashboard`
+- [x] `/dashboard` protected hai (proxy + session check)
 
-**Dhyan rakho:** `users.ts` ko maine abhi **asli MongoDB ke saath chalakar test nahi kiya**, kyunki `MONGODB_URI` abhi khali hai. Types aur lint pass hain. Jab tum `/api/health/db` se `ok` dikha doge, tab signup banate waqt iska pehla asli test hoga.
+**Abhi nahi bana**
+1. Forgot / reset password
+2. Email confirmation
+3. ~~Asli vault~~ ban gaya hai, dekho [VAULT_FLOW.md](VAULT_FLOW.md)
+4. Rate limit ko multi-server ke liye shared banana
+
+**Test status:** poora flow asli local MongoDB aur asli server par test hua hai (signup, cookie, dashboard, duplicate email, galat password, logout, rate limit). Browser me forms ko haath se chalakar dekhna baaki hai.

@@ -4,7 +4,7 @@ import { AuthShell } from "@/modules/auth/auth-shell";
 
 export const metadata: Metadata = {
   title: "Sign in — Dotkeep",
-  description: "Dotkeep is in its early stages. Accounts aren’t live yet.",
+  description: "Sign in to your Dotkeep workspace.",
 };
 
 export default function LoginPage() {
