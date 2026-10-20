@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { AdminStats, AdminUserRow } from "@/db/admin";
 import { formatDate } from "@/modules/vault/format";
+import { MaskEmailsToggle, UserActions } from "./admin-actions";
 
 const reveal = (i: number) => ({ "--i": i }) as React.CSSProperties;
 
 export function StatTiles({ stats }: { stats: AdminStats }) {
   const tiles = [
-    { label: "Registered users", value: stats.totalUsers, hint: `${stats.admins} admin${stats.admins === 1 ? "" : "s"}${stats.unverified ? ` · ${stats.unverified} unverified` : ""}` },
+    { label: "Registered users", value: stats.totalUsers, hint: `${stats.admins} admin${stats.admins === 1 ? "" : "s"}${stats.unverified ? ` · ${stats.unverified} unverified` : ""}${stats.blocked ? ` · ${stats.blocked} blocked` : ""}` },
     { label: "New in 7 days", value: stats.newUsers7d, hint: "Signed up this week" },
     { label: "Active in 24 hours", value: stats.active24h, hint: `${stats.active7d} in the last 7 days` },
     { label: "Total logins", value: stats.totalLogins, hint: "All time" },
@@ -61,18 +62,21 @@ function pageHref(query: string | undefined, page: number) {
   return text ? `/dashboard/admin?${text}` : "/dashboard/admin";
 }
 
-export function UsersTable({ users, total, page, pages, query }: { users: AdminUserRow[]; total: number; page: number; pages: number; query?: string }) {
+export function UsersTable({ users, total, page, pages, query, maskEmails }: { users: AdminUserRow[]; total: number; page: number; pages: number; query?: string; maskEmails: boolean }) {
   return (
     <section className="dash-panel dash-reveal ad-users" style={reveal(5)} aria-labelledby="users-heading">
       <div className="dash-panel-head">
         <h2 id="users-heading">Users</h2>
-        <span className="dash-badge">{total.toLocaleString("en")} {query ? "found" : "total"}</span>
+        <div className="ad-head-actions">
+          <MaskEmailsToggle masked={maskEmails} />
+          <span className="dash-badge">{total.toLocaleString("en")} {query ? "found" : "total"}</span>
+        </div>
       </div>
 
       <form className="ad-search" action="/dashboard/admin" method="get" role="search">
         <label className="vt-search">
           <Search aria-hidden="true" />
-          <Input className="h-10 pl-9" type="search" name="q" defaultValue={query ?? ""} placeholder="Search by name or email" aria-label="Search users" maxLength={80} />
+          <Input className="h-10 pl-9" type="search" name="q" defaultValue={query ?? ""} placeholder={maskEmails ? "Search by name" : "Search by name or email"} aria-label="Search users" maxLength={80} />
         </label>
         <Button type="submit" variant="outline" className="h-10 px-4">Search</Button>
         {query && <Link className="auth-link" href="/dashboard/admin">Clear</Link>}
@@ -90,10 +94,11 @@ export function UsersTable({ users, total, page, pages, query }: { users: AdminU
             <span role="columnheader">Logins</span>
             <span role="columnheader">Projects</span>
             <span role="columnheader">Secrets</span>
+            <span role="columnheader"><span className="sr-only">Actions</span></span>
           </div>
           {users.map((user) => (
             <div className="at-row" role="row" key={user.id}>
-              <div role="cell" className="at-user"><b>{user.name}{!user.emailVerified && <span className="at-unverified">Unverified</span>}</b><small>{user.email}</small></div>
+              <div role="cell" className="at-user"><b>{user.name}{!user.emailVerified && <span className="at-unverified">Unverified</span>}{user.blocked && <span className="at-blocked">Blocked</span>}</b><small>{user.email}</small></div>
               <div role="cell" data-label="Role">
                 {user.role === "admin" ? <span className="at-role"><ShieldCheck aria-hidden="true" /> Admin</span> : <span className="at-plain">User</span>}
               </div>
@@ -102,10 +107,13 @@ export function UsersTable({ users, total, page, pages, query }: { users: AdminU
               <div role="cell" data-label="Logins">{user.loginCount}</div>
               <div role="cell" data-label="Projects">{user.projectCount}</div>
               <div role="cell" data-label="Secrets">{user.secretCount}</div>
+              <div role="cell" className="at-actions">{user.role !== "admin" && <UserActions user={{ id: user.id, name: user.name, blocked: user.blocked }} />}</div>
             </div>
           ))}
         </div>
       )}
+
+      {maskEmails && <p className="dash-panel-note">Emails are masked, and search matches names only. Turn masking off to see them.</p>}
 
       {pages > 1 && (
         <nav className="ad-pager" aria-label="Pagination">

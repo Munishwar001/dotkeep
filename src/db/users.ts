@@ -7,6 +7,7 @@
  * This file never hashes passwords and never sets cookies. It stores and finds documents, nothing else.
  * Callers pass in an already-hashed password (`passwordHash`), never the real one.
  */
+import { logError } from "@/lib/logger";
 import type { Collection, ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
 import { REVEAL_SECONDS } from "@/modules/vault/constants";
@@ -28,6 +29,10 @@ export type UserDoc = {
   // field at all, and "missing" counts as verified so nobody gets locked out.
   emailVerified?: boolean;
   emailVerifiedAt?: Date;
+  // Set by an admin (Admin page). A blocked user can't log in and every session of theirs is ended. Missing = not blocked.
+  blockedAt?: Date;
+  // Admin preference: show other users' emails masked (j***@g***.com) on the Admin page. Missing = false.
+  maskEmails?: boolean;
 };
 
 export type Role = "user" | "admin";
@@ -36,7 +41,7 @@ export type Role = "user" | "admin";
 export type NewUser = { name: string; email: string; passwordHash: string };
 
 /** A user that is safe to send to the browser: no password hash. */
-export type PublicUser = { id: string; name: string; email: string; role: Role; revealSeconds: number; emailVerified: boolean; createdAt: Date };
+export type PublicUser = { id: string; name: string; email: string; role: Role; revealSeconds: number; emailVerified: boolean; maskEmails: boolean; createdAt: Date };
 
 /** Thrown by createUser() when the email is already registered. */
 export class EmailTakenError extends Error {
@@ -53,6 +58,8 @@ export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+export const isBlocked = (user: Pick<UserDoc, "blockedAt">) => user.blockedAt !== undefined;
+
 /** True unless the account was created after verification existed and is still unconfirmed. */
 export function isEmailVerified(user: Pick<UserDoc, "emailVerified">): boolean {
   return user.emailVerified !== false;
@@ -60,7 +67,7 @@ export function isEmailVerified(user: Pick<UserDoc, "emailVerified">): boolean {
 
 /** Strips the password hash. Always use this before returning a user to the browser. */
 export function toPublicUser(user: UserDoc): PublicUser {
-  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", revealSeconds: user.revealSeconds ?? REVEAL_SECONDS, emailVerified: isEmailVerified(user), createdAt: user.createdAt };
+  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", revealSeconds: user.revealSeconds ?? REVEAL_SECONDS, emailVerified: isEmailVerified(user), maskEmails: user.maskEmails === true, createdAt: user.createdAt };
 }
 
 // The unique index on `email` is what really stops two accounts with the same email, even if two
@@ -126,7 +133,7 @@ export async function recordLogin(userId: ObjectId): Promise<void> {
     await users.updateOne({ _id: userId }, { $set: { lastLoginAt: now }, $inc: { loginCount: 1 } });
     await recordLoginEvent(userId, now);
   } catch (error) {
-    console.error("could not record login", error);
+    await logError(error, "could not record login");
   }
 }
 

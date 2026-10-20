@@ -1,0 +1,88 @@
+name: CI
+
+# Runs on every pull request and on pushes to main and dev:
+# types, lint, unit tests, a production build, and the API tests against a real MongoDB.
+on:
+  pull_request:
+  push:
+    branches: [main, dev]
+
+# A newer push to the same branch or PR cancels the run that is still going.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    # The API tests need a database. This one is thrown away with the job.
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+
+    env:
+      # Throw-away settings for this job only. Nothing here is a real secret.
+      MONGODB_URI: mongodb://localhost:27017/
+      MONGODB_DB: dotkeep_ci
+      APP_URL: http://localhost:3000
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      # A fresh key every run, kept out of the log.
+      - name: Make a vault key
+        run: |
+          key="$(node -e "console.log(require('crypto').randomBytes(32).toString('base64'))")"
+          echo "::add-mask::$key"
+          echo "VAULT_ENCRYPTION_KEY=$key" >> "$GITHUB_ENV"
+
+      - name: Build
+        run: npm run build
+
+      - name: Start the app
+        run: |
+          nohup npm run start > server.log 2>&1 &
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:3000/api/health/db && exit 0
+            sleep 2
+          done
+          echo "The app did not become healthy in time"
+          cat server.log
+          exit 1
+
+      - name: API tests
+        run: npm test
+
+      - name: Server log
+        if: failure()
+        run: cat server.log || true

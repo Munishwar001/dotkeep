@@ -1,3 +1,4 @@
+import { logError } from "@/lib/logger";
 import { NextResponse } from "next/server";
 import { createUser, EmailTakenError, toPublicUser } from "@/db/users";
 import { parseSignup } from "@/lib/auth-input";
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     if (error instanceof EmailTakenError) {
       return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });
     }
-    console.error("signup failed", error);
+    await logError(error, "signup failed");
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }

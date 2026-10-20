@@ -8,6 +8,7 @@
  * so you can copy the link without any mail service. In production that fallback is OFF: a missing
  * setting is an error, so a link is never silently dropped or leaked to the logs.
  */
+import { logError } from "./logger";
 import nodemailer, { type Transporter } from "nodemailer";
 
 const host = process.env.SMTP_HOST;
@@ -69,7 +70,7 @@ export async function sendMail(mail: Mail): Promise<void> {
     await transporter().sendMail({ from, to: mail.to, subject: mail.subject, text: mail.text, html: mail.html });
   } catch (error) {
     // Keep the provider's message in the server log only. Callers show a generic message.
-    console.error("mail: could not send", error);
+    await logError(error, "mail: could not send");
     throw new MailError("The email could not be sent.");
   }
 }

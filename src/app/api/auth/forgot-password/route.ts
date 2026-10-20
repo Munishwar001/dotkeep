@@ -1,3 +1,4 @@
+import { logError } from "@/lib/logger";
 import { after, NextResponse } from "next/server";
 import { findUserByEmail, normalizeEmail } from "@/db/users";
 import { parseEmailOnly } from "@/lib/auth-input";
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
       const user = await findUserByEmail(email);
       if (user) await sendPasswordResetEmail(user);
     } catch (error) {
-      console.error("forgot-password failed", error);
+      await logError(error, "forgot-password failed");
     }
   });
 
