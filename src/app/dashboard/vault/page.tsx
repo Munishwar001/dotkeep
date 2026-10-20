@@ -32,7 +32,7 @@ async function VaultContent() {
       <Topbar user={user} title="Vault" />
       <main className="dash-content">
         <PageHeader kicker="VAULT" title="Your secrets" text="Every secret across your projects. Values stay masked until you reveal them." />
-        <SecretsTable secrets={secrets} projects={projects.map(({ id, name }) => ({ id, name }))} revealSeconds={user.revealSeconds} />
+        <SecretsTable secrets={secrets} projects={projects.map(({ id, name, role, ownerId }) => ({ id, name, role, ownerId }))} revealSeconds={user.revealSeconds} />
       </main>
     </>
   );

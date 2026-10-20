@@ -25,6 +25,25 @@ export const LIMITS = {
   projectDescription: 280,
   secretName: 80,
   secretValue: 10_000,
+  versions: 20, // old values kept per secret
+  bulk: 200, // secrets in one bulk edit or delete
+  importEntries: 500, // variables in one .env import
+  importBytes: 200_000, // size of one .env import
+} as const;
+
+export const ROLE_LABELS = { owner: "Owner", editor: "Editor", viewer: "Viewer" } as const;
+
+/** The audit log's labels. */
+export const AUDIT_LABELS = {
+  created: "Created",
+  revealed: "Viewed",
+  updated: "Edited",
+  value_changed: "Value changed",
+  moved: "Moved",
+  restored: "Restored old value",
+  imported: "Imported from .env",
+  exported: "Exported to .env",
+  deleted: "Deleted",
 } as const;
 
 /** A revealed value hides itself again after this many seconds. Users can pick another one in Settings. */

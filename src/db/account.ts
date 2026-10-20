@@ -37,9 +37,12 @@ export async function deleteAccount(userId: ObjectId): Promise<{ ok: true } | { 
   if (!user) return { ok: false, reason: "not-found" };
   if (user.role === "admin" && (await users.countDocuments({ role: "admin" })) <= 1) return { ok: false, reason: "last-admin" };
 
-  const [{ projects, secrets }, sessions, events] = await Promise.all([collections(), sessionsCollection(), loginEventsCollection()]);
+  const [{ projects, secrets, versions, events: auditEvents, members }, sessions, events] = await Promise.all([collections(), sessionsCollection(), loginEventsCollection()]);
   await sessions.deleteMany({ userId });
   await secrets.deleteMany({ userId });
+  await members.deleteMany({ $or: [{ ownerId: userId }, { userId }] }); // their projects' sharing, and their access to others'
+  await versions.deleteMany({ userId });
+  await auditEvents.deleteMany({ userId });
   await projects.deleteMany({ userId });
   await events.deleteMany({ userId });
   await users.deleteOne({ _id: userId });

@@ -9,11 +9,15 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import type { Role } from "@/db/access";
 import type { PublicSecret } from "@/db/secrets";
 import { api } from "./client-api";
 import { ENVIRONMENTS, LIMITS, SECRET_TYPES, type Environment, type SecretType } from "./constants";
 
-export type ProjectOption = { id: string; name: string };
+/** A project the user can open. `role` decides what they may do there; `ownerId` limits where a secret can move. */
+export type ProjectOption = { id: string; name: string; role: Role; ownerId: string };
+
+export const canWriteTo = (project: ProjectOption | undefined) => project !== undefined && project.role !== "viewer";
 
 type SecretDialogProps = {
   open: boolean;
@@ -21,6 +25,8 @@ type SecretDialogProps = {
   projects: ProjectOption[];
   defaultProjectId?: string;
   secret?: PublicSecret; // present = edit, absent = create
+  /** Create only: start with this name and environment (used to fill a gap in the environments view). */
+  prefill?: { name: string; environment: Environment };
   /** Called after an edit is saved, so the table can hide a value that is now out of date. */
   onSaved?: (secretId: string) => void;
 };
@@ -36,12 +42,17 @@ export function SecretDialog({ open, onOpenChange, ...rest }: SecretDialogProps)
   );
 }
 
-function SecretForm({ projects, defaultProjectId, secret, onSaved, onDone }: Omit<SecretDialogProps, "open" | "onOpenChange"> & { onDone: () => void }) {
+function SecretForm({ projects: allProjects, defaultProjectId, secret, prefill, onSaved, onDone }: Omit<SecretDialogProps, "open" | "onOpenChange"> & { onDone: () => void }) {
   const router = useRouter();
   const editing = Boolean(secret);
-  const [name, setName] = useState(secret?.name ?? "");
-  const [projectId, setProjectId] = useState(secret?.projectId ?? defaultProjectId ?? projects[0]?.id ?? "");
-  const [environment, setEnvironment] = useState<Environment>(secret?.environment ?? "local");
+  // You can only put secrets where you may write, and a secret only moves between projects of the same owner.
+  const ownerId = secret ? allProjects.find((project) => project.id === secret.projectId)?.ownerId : undefined;
+  const projects = allProjects.filter((project) => canWriteTo(project) && (!ownerId || project.ownerId === ownerId));
+  const [name, setName] = useState(secret?.name ?? prefill?.name ?? "");
+  const [projectId, setProjectId] = useState(
+    secret?.projectId ?? (projects.some((project) => project.id === defaultProjectId) ? defaultProjectId : undefined) ?? projects[0]?.id ?? "",
+  );
+  const [environment, setEnvironment] = useState<Environment>(secret?.environment ?? prefill?.environment ?? "local");
   const [type, setType] = useState<SecretType>(secret?.type ?? "api_key");
   const [value, setValue] = useState("");
   const [showValue, setShowValue] = useState(false);
@@ -58,7 +69,13 @@ function SecretForm({ projects, defaultProjectId, secret, onSaved, onDone }: Omi
     setPending(true);
     setError(null);
     const result = secret
-      ? await api("PATCH", `/api/vault/secrets/${secret.id}`, { name, environment, type, ...(value ? { value } : {}) }) // blank = keep the stored value
+      ? await api("PATCH", `/api/vault/secrets/${secret.id}`, {
+          name,
+          environment,
+          type,
+          ...(projectId !== secret.projectId ? { projectId } : {}), // a different project = move the secret there
+          ...(value ? { value } : {}), // blank = keep the stored value
+        })
       : await api("POST", "/api/vault/secrets", { projectId, name, environment, type, value });
     if (!result.ok) {
       setError(result.error);
@@ -75,7 +92,7 @@ function SecretForm({ projects, defaultProjectId, secret, onSaved, onDone }: Omi
       <DialogHeader>
         <DialogTitle>{editing ? "Edit secret" : "New secret"}</DialogTitle>
         <DialogDescription>
-          {editing ? "Change the details. Leave the value blank to keep the current one." : "The value is encrypted before it is saved."}
+          {editing ? "Change the details, or pick another project to move it. Leave the value blank to keep the current one. A new value keeps the old one in History." : "The value is encrypted before it is saved."}
         </DialogDescription>
       </DialogHeader>
 
@@ -87,7 +104,7 @@ function SecretForm({ projects, defaultProjectId, secret, onSaved, onDone }: Omi
 
         <Field>
           <FieldLabel htmlFor="secret-project">Project</FieldLabel>
-          <NativeSelect id="secret-project" className="w-full" value={projectId} disabled={editing} onChange={(e) => setProjectId(e.target.value)}>
+          <NativeSelect id="secret-project" className="w-full" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
             {projects.map((project) => <NativeSelectOption key={project.id} value={project.id}>{project.name}</NativeSelectOption>)}
           </NativeSelect>
         </Field>

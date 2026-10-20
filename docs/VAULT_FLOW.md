@@ -184,6 +184,48 @@ Agar `VAULT_ENCRYPTION_KEY` nahi hai, to Vault aur Projects pages ek saaf messag
 
 ## 10. Abhi nahi hai
 
-Teams ya sharing, secret ki purani versions (history), `.env` file import/export, audit log, project badalna (secret ko dusre project me le jana), aur custom tags.
+Custom tags, aur poori teams/organisation (abhi sirf project-level sharing hai, section 12).
+
+---
+
+## 11. Naye features: .env, history, audit log, bulk
+
+| Feature | Kaise kaam karta hai |
+|---|---|
+| **.env import** | Vault toolbar ke `.env` menu se. File ya paste, project + environment chuno. Har `NAME=value` encrypted secret (type: Environment variable) banta hai. "Replace" tick karo to maujood values badal jati hain (purani history me jati hai). Parser: `src/lib/dotenv.ts` |
+| **.env export** | Same menu se. Ek project + environment ke saare secrets decrypt hokar `.env.<environment>` file me download. Rate limit 10/min. Jin naamo me space jaisi cheez hai (valid variable naam nahi) wo chhod diye jaate hain aur bataye jaate hain |
+| **Version history** | Value badalne par purani value `secret_versions` me encrypted rehti hai (last 20). Row menu → History → Versions: reveal, copy, **Restore**. Restore karne par jo value hat rahi hai wo bhi history me chali jati hai |
+| **Audit log** | `secret_events` collection. Created, Viewed (reveal/copy), Edited, Value changed, Moved, Restored, Imported, Exported, Deleted. Sirf metadata, value kabhi nahi. Secret delete hone ke baad bhi log rehta hai. Page: `/dashboard/activity`, aur har secret ke History → Activity me |
+| **Dusre project me le jana** | Edit dialog me Project badlo (ab disabled nahi). Same naam + environment target me pehle se ho to 409 |
+| **Bulk edit / delete** | Rows tick karo → bar me **Edit / move** (project, environment, type ek saath) ya **Delete**. Jo secret change nahi le sakta (naam target me maujood) wo alag se bataya jata hai, baaki ho jate hain. Ek baar me max 200 |
+
+Naye API: `POST /api/vault/import`, `POST /api/vault/export`, `POST /api/vault/secrets/bulk`, `GET /api/vault/secrets/:id/versions`, `POST .../versions/:versionId/reveal`, `POST .../versions/:versionId/restore`, `GET /api/vault/secrets/:id/activity`. `PATCH /api/vault/secrets/:id` ab `projectId` bhi leta hai.
+
+Note: audit log likhna fail ho jaye to action nahi rukta (error server log me jata hai). Account delete par versions aur events bhi delete hote hain.
 
 Sab test asli MongoDB aur asli Chrome ke saath hue hain: API ke 47 checks (encryption, ownership, tampering, limits, rate limit) aur UI ke 46 checks (create, reveal, auto-hide, copy, filter, edit, delete, mobile).
+
+---
+
+## 12. Sharing (small teams) aur Environments view
+
+**Model:** har project ka **ek owner** hota hai. Owner dusre logon ko project par role de sakta hai (collection `project_members`):
+
+| Role | Kya kar sakta hai |
+|---|---|
+| **Owner** | Sab kuch: share, rename, delete project, members badalna/hatana |
+| **Editor** | Secrets add / edit / move / delete, .env import, history se restore |
+| **Viewer** | Dekhna: reveal, copy, .env export, history aur activity padhna. Badal kuch nahi sakta |
+
+- Share karne ke liye owner project page par **Share** dabata hai, verified Dotkeep account ki email aur role deta hai. Rate limit: 20 invites per ghanta (jawab se pata chalta hai email ka account hai ya nahi).
+- Secret hamesha **owner ka** rehta hai (`secret.userId` = owner), chahe kisi editor ne banaya ho. Isliye encryption context (`ownerId:secretId`) nahi badalta aur sharing me ciphertext ko chhua nahi jata.
+- Isi wajah se secret sirf **same owner ke projects** ke beech move ho sakta hai.
+- Access nahi hai to API **404** deti hai (jaise exist hi nahi karta). Role kam hai to **403**.
+- Member kabhi bhi **Leave project** kar sakta hai. Owner kisi ko hata de to access turant band, par unhone jo values dekh li hain unki copy ho sakti hai.
+- Audit log me ab **kisne** kiya wo bhi likha jata hai (`actorName`). Project ke saare members project ka log dekh sakte hain.
+- Project delete hone par sharing bhi hat jati hai. Account delete par uske projects ki sharing aur dusron ke projects me uski membership hat jati hai.
+- Access ka poora logic: `src/db/access.ts`. Routes pehle `projectAccess` / `secretAccess` se role nikalte hain, phir owner ki id se db functions chalate hain.
+
+**Environments view:** project page par List / Environments toggle. Environments me ek row = ek secret naam, teen columns = Local, Staging, Production. Jo environment me secret nahi hai wahan **Add** button (naam aur environment pehle se bhara hua) aur row par "Missing in ..." likha aata hai.
+
+Naye API: `GET/POST /api/vault/projects/:id/members`, `PATCH/DELETE /api/vault/projects/:id/members/:userId`.

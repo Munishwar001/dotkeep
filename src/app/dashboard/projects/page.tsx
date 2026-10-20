@@ -35,7 +35,7 @@ async function ProjectsContent() {
         <PageHeader
           kicker="PROJECTS"
           title="Your projects"
-          text="A project groups the secrets for one app or service."
+          text="A project groups the secrets for one app or service. Share one with your team from its page."
           actions={projects.length > 0 ? <NewProjectButton /> : undefined}
         />
 

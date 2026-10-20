@@ -10,6 +10,7 @@ import { DashboardFrame } from "@/modules/dashboard/frame";
 import { Topbar } from "@/modules/dashboard/overview";
 import { PageHeader, SetupNotice } from "@/modules/dashboard/page-header";
 import { ProjectActions } from "@/modules/vault/project-actions";
+import { LeaveProjectButton, ShareButton } from "@/modules/vault/project-sharing";
 import { SecretsTable } from "@/modules/vault/secrets-table";
 
 export const metadata: Metadata = {
@@ -45,9 +46,23 @@ async function ProjectContent({ params }: { params: Promise<{ id: string }> }) {
           kicker="PROJECT"
           title={project.name}
           text={project.description || undefined}
-          actions={<ProjectActions project={project} redirectTo="/dashboard/projects" />}
+          actions={
+            project.role === "owner" ? (
+              <>
+                <ShareButton project={project} />
+                <ProjectActions project={project} redirectTo="/dashboard/projects" />
+              </>
+            ) : (
+              <LeaveProjectButton project={project} userId={userId.toString()} />
+            )
+          }
         />
-        <SecretsTable secrets={secrets} projects={projects.map(({ id, name }) => ({ id, name }))} fixedProjectId={project.id} revealSeconds={user.revealSeconds} />
+        {project.role !== "owner" && (
+          <p className="vt-sharenote">
+            Shared with you by <b>{project.ownerName}</b>. You can {project.role === "editor" ? "view and change secrets here" : "view secrets here, but not change them"}.
+          </p>
+        )}
+        <SecretsTable secrets={secrets} projects={projects.map(({ id, name, role, ownerId }) => ({ id, name, role, ownerId }))} fixedProjectId={project.id} revealSeconds={user.revealSeconds} />
       </main>
     </>
   );

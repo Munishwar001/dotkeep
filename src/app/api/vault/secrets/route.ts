@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { projectAccess } from "@/db/access";
 import { parseObjectId } from "@/db/collections";
 import { createSecret, listSecrets } from "@/db/secrets";
-import { apiError, authorize, handleError, noStore } from "@/lib/api-guard";
+import { apiError, authorize, handleError, noStore, requireRole } from "@/lib/api-guard";
 import { parseSecretCreate } from "@/lib/vault-input";
 
-// GET /api/vault/secrets?projectId=...  ->  your secrets. The values are never included, only names and details.
+// GET /api/vault/secrets?projectId=...  ->  the secrets of your projects and those shared with you. The values are never included, only names and details.
 export async function GET(request: Request) {
   const auth = await authorize(request, { mutating: false });
   if (auth instanceof Response) return auth;
@@ -31,7 +32,10 @@ export async function POST(request: Request) {
   if (!projectId) return apiError("Project not found.", 404);
 
   try {
-    const secret = await createSecret(auth.userId, { ...parsed.data, projectId });
+    const access = await projectAccess(auth.userId, projectId);
+    const denied = requireRole(access, "write", "Project not found.");
+    if (denied || !access) return denied!;
+    const secret = await createSecret(access.ownerId, auth.actor, { ...parsed.data, projectId });
     return secret ? NextResponse.json({ secret }, { status: 201, headers: noStore }) : apiError("Project not found.", 404);
   } catch (error) {
     return handleError(error);

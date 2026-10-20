@@ -18,13 +18,14 @@ type ConfirmDialogProps = {
   title: string;
   description: string;
   confirmLabel: string;
+  pendingLabel?: string;
   pending: boolean;
   error: string | null;
   onConfirm: () => void;
 };
 
 /** "Are you sure?" popup for deletes. It stays open until the server answers, and shows any error inside it. */
-export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, pending, error, onConfirm }: ConfirmDialogProps) {
+export function ConfirmDialog({ open, onOpenChange, title, description, confirmLabel, pendingLabel = "Deleting…", pending, error, onConfirm }: ConfirmDialogProps) {
   return (
     <AlertDialog open={open} onOpenChange={(next) => !pending && onOpenChange(next)}>
       <AlertDialogContent>
@@ -36,7 +37,7 @@ export function ConfirmDialog({ open, onOpenChange, title, description, confirmL
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={onConfirm} disabled={pending}>
-            {pending ? "Deleting…" : confirmLabel}
+            {pending ? pendingLabel : confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

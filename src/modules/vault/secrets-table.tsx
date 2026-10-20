@@ -2,29 +2,33 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { Check, Copy, Eye, EyeOff, KeyRound, MoreHorizontal, Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { Check, Columns3, Copy, Download, Eye, EyeOff, History, KeyRound, List, ListChecks, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { PublicSecret } from "@/db/secrets";
+import { BulkEditDialog } from "./bulk-edit-dialog";
 import { api } from "./client-api";
 import { ConfirmDialog } from "./confirm-dialog";
-import { ENVIRONMENTS, REVEAL_SECONDS, SECRET_TYPES, environmentLabel, secretTypeLabel } from "./constants";
+import { ENVIRONMENTS, REVEAL_SECONDS, SECRET_TYPES, environmentLabel, secretTypeLabel, type Environment } from "./constants";
+import { EnvTransferDialog, type TransferMode } from "./env-transfer-dialog";
 import { formatDate } from "./format";
-import { SecretDialog, type ProjectOption } from "./secret-dialog";
+import { HistoryDialog } from "./history-dialog";
+import { canWriteTo, SecretDialog, type ProjectOption } from "./secret-dialog";
+import { useReveal } from "./use-reveal";
 
 type SecretsTableProps = {
   secrets: PublicSecret[];
   projects: ProjectOption[];
-  /** On a project's own page: only that project's secrets, and no Project column or filter. */
+  /** On a project's own page: only that project's secrets, no Project column or filter, and the Environments view. */
   fixedProjectId?: string;
   /** How long a revealed value stays visible. It is the user's own setting (Settings -> Vault). */
   revealSeconds?: number;
 };
 
-type DialogState = { kind: "new" } | { kind: "edit"; secret: PublicSecret } | null;
+type DialogState = { kind: "new"; prefill?: { name: string; environment: Environment } } | { kind: "edit"; secret: PublicSecret } | null;
 
 const MASK = "••••••••••••";
 
@@ -34,25 +38,32 @@ export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds 
   const [projectFilter, setProjectFilter] = useState("");
   const [environmentFilter, setEnvironmentFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
+  const [view, setView] = useState<"list" | "environments">("list");
 
   const [dialog, setDialog] = useState<DialogState>(null);
   const [deleting, setDeleting] = useState<PublicSecret | null>(null);
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Revealed values live only in this component's memory and hide themselves after REVEAL_SECONDS.
-  const [revealed, setRevealed] = useState<Record<string, string>>({});
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<string | null>(null);
-  const hideTimers = useRef<Record<string, number>>({});
+  const [history, setHistory] = useState<PublicSecret | null>(null);
+  const [transfer, setTransfer] = useState<TransferMode | null>(null);
 
-  useEffect(() => {
-    const timers = hideTimers.current;
-    return () => Object.values(timers).forEach((timer) => window.clearTimeout(timer));
-  }, []);
+  // Bulk actions: tick rows, then edit or delete them all at once.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkEditing, setBulkEditing] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkPending, setBulkPending] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
 
-  const projectName = (id: string) => projects.find((project) => project.id === id)?.name ?? "Unknown project";
+  const { revealed, copiedId, busyId, error: rowError, hide, toggleReveal, copy } = useReveal(revealSeconds);
+
+  const projectOf = (id: string) => projects.find((project) => project.id === id);
+  const projectName = (id: string) => projectOf(id)?.name ?? "Unknown project";
+  /** Viewers can look at a secret but not change it. */
+  const canChange = (secret: PublicSecret) => canWriteTo(projectOf(secret.projectId));
+  const writableProjects = projects.filter(canWriteTo);
+  const canAdd = fixedProjectId ? canWriteTo(projectOf(fixedProjectId)) : writableProjects.length > 0;
+
   const hasFilters = Boolean(query || projectFilter || environmentFilter || typeFilter);
   const visible = secrets.filter(
     (secret) =>
@@ -62,47 +73,49 @@ export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds 
       (!typeFilter || secret.type === typeFilter),
   );
 
-  function hide(id: string) {
-    window.clearTimeout(hideTimers.current[id]);
-    delete hideTimers.current[id];
-    setRevealed((current) => {
-      const next = { ...current };
-      delete next[id];
+  // Selection only counts rows that still exist and that you may change.
+  const selectedSecrets = secrets.filter((secret) => selected.has(secret.id) && canChange(secret));
+  const selectedIds = selectedSecrets.map((secret) => secret.id);
+  const selectable = visible.filter(canChange);
+  const allVisibleSelected = selectable.length > 0 && selectable.every((secret) => selected.has(secret.id));
+
+  // Moving needs one common owner: a secret stays encrypted for its owner and can't change hands.
+  const owners = new Set(selectedSecrets.map((secret) => projectOf(secret.projectId)?.ownerId));
+  const movableProjects = owners.size === 1 ? writableProjects.filter((project) => project.ownerId === [...owners][0]) : [];
+
+  function toggleSelected(id: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (!next.delete(id)) next.add(id);
       return next;
     });
   }
 
-  /** Asks the server for the decrypted value. It is only ever fetched when you click. */
-  async function fetchValue(id: string): Promise<string | null> {
-    setBusyId(id);
-    setRowError(null);
-    const result = await api<{ value: string }>("POST", `/api/vault/secrets/${id}/reveal`);
-    setBusyId(null);
-    if (!result.ok) {
-      setRowError(result.error);
-      return null;
-    }
-    return result.data.value;
+  function toggleAllVisible() {
+    setSelected((current) => {
+      const next = new Set(current);
+      for (const secret of selectable) {
+        if (allVisibleSelected) next.delete(secret.id);
+        else next.add(secret.id);
+      }
+      return next;
+    });
   }
 
-  async function toggleReveal(id: string) {
-    if (revealed[id] !== undefined) return hide(id);
-    const value = await fetchValue(id);
-    if (value === null) return;
-    setRevealed((current) => ({ ...current, [id]: value }));
-    hideTimers.current[id] = window.setTimeout(() => hide(id), revealSeconds * 1000);
+  function afterBulk() {
+    selectedIds.forEach(hide);
+    setSelected(new Set());
   }
 
-  async function copy(id: string) {
-    const value = revealed[id] ?? (await fetchValue(id));
-    if (value === null) return;
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopiedId(id);
-      window.setTimeout(() => setCopiedId((current) => (current === id ? null : current)), 1500);
-    } catch {
-      setRowError("Couldn’t copy to the clipboard. Reveal the value and copy it by hand.");
-    }
+  async function confirmBulkDelete() {
+    setBulkPending(true);
+    setBulkError(null);
+    const result = await api("POST", "/api/vault/secrets/bulk", { action: "delete", ids: selectedIds });
+    setBulkPending(false);
+    if (!result.ok) return setBulkError(result.error);
+    afterBulk();
+    setBulkDeleting(false);
+    router.refresh();
   }
 
   async function confirmDelete() {
@@ -117,7 +130,48 @@ export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds 
     router.refresh();
   }
 
-  const canAdd = projects.length > 0;
+  /** The "..." menu of one secret, shared by the list and the environments view. */
+  function secretMenu(secret: PublicSecret) {
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger className="vt-icon-button" aria-label={`Actions for ${secret.name}`}><MoreHorizontal aria-hidden="true" /></DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          {canChange(secret) && <DropdownMenuItem onClick={() => setDialog({ kind: "edit", secret })}><Pencil aria-hidden="true" /> Edit / move</DropdownMenuItem>}
+          <DropdownMenuItem onClick={() => setHistory(secret)}><History aria-hidden="true" /> History</DropdownMenuItem>
+          {canChange(secret) && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem variant="destructive" onClick={() => { setDeleteError(null); setDeleting(secret); }}><Trash2 aria-hidden="true" /> Delete</DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  }
+
+  /** Masked value with reveal and copy buttons. */
+  function valueCells(secret: PublicSecret) {
+    const shown = revealed[secret.id];
+    return (
+      <>
+        <code className={shown !== undefined ? "is-revealed" : undefined} aria-live="polite">{shown ?? MASK}</code>
+        <Button type="button" variant="ghost" size="icon-xs" aria-label={shown !== undefined ? `Hide ${secret.name}` : `Reveal ${secret.name}`} onClick={() => toggleReveal(secret.id)} disabled={busyId === secret.id}>
+          {shown !== undefined ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+        </Button>
+        <Button type="button" variant="ghost" size="icon-xs" aria-label={`Copy ${secret.name}`} onClick={() => copy(secret.id)} disabled={busyId === secret.id}>
+          {copiedId === secret.id ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
+        </Button>
+      </>
+    );
+  }
+
+  // Environments view: one row per secret name, one column per environment.
+  const rows = [...visible.reduce((map, secret) => {
+    const key = secret.name.trim().toLowerCase();
+    const row = map.get(key) ?? { name: secret.name, byEnv: {} as Partial<Record<Environment, PublicSecret>> };
+    row.byEnv[secret.environment] = secret;
+    return map.set(key, row);
+  }, new Map<string, { name: string; byEnv: Partial<Record<Environment, PublicSecret>> }>()).values()].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="vt-wrap">
@@ -132,31 +186,65 @@ export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds 
             {projects.map((project) => <NativeSelectOption key={project.id} value={project.id}>{project.name}</NativeSelectOption>)}
           </NativeSelect>
         )}
-        <NativeSelect className="vt-filter" aria-label="Filter by environment" value={environmentFilter} onChange={(e) => setEnvironmentFilter(e.target.value)}>
-          <NativeSelectOption value="">All environments</NativeSelectOption>
-          {ENVIRONMENTS.map((item) => <NativeSelectOption key={item.value} value={item.value}>{item.label}</NativeSelectOption>)}
-        </NativeSelect>
+        {view === "list" && (
+          <NativeSelect className="vt-filter" aria-label="Filter by environment" value={environmentFilter} onChange={(e) => setEnvironmentFilter(e.target.value)}>
+            <NativeSelectOption value="">All environments</NativeSelectOption>
+            {ENVIRONMENTS.map((item) => <NativeSelectOption key={item.value} value={item.value}>{item.label}</NativeSelectOption>)}
+          </NativeSelect>
+        )}
         <NativeSelect className="vt-filter" aria-label="Filter by type" value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)}>
           <NativeSelectOption value="">All types</NativeSelectOption>
           {SECRET_TYPES.map((item) => <NativeSelectOption key={item.value} value={item.value}>{item.label}</NativeSelectOption>)}
         </NativeSelect>
+        {fixedProjectId && (
+          <div className="vt-viewtoggle" role="group" aria-label="View">
+            <button type="button" aria-pressed={view === "list"} onClick={() => setView("list")}><List aria-hidden="true" /> List</button>
+            <button type="button" aria-pressed={view === "environments"} onClick={() => { setView("environments"); setEnvironmentFilter(""); }}><Columns3 aria-hidden="true" /> Environments</button>
+          </div>
+        )}
+        {projects.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger className="vt-more-button" aria-label=".env import and export"><Upload aria-hidden="true" /> .env</DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {canAdd && <DropdownMenuItem onClick={() => setTransfer("import")}><Upload aria-hidden="true" /> Import .env file</DropdownMenuItem>}
+              <DropdownMenuItem onClick={() => setTransfer("export")}><Download aria-hidden="true" /> Export to .env</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
         {canAdd ? (
           <Button size="lg" className="h-10 gap-2 px-4 text-[13px]" onClick={() => setDialog({ kind: "new" })}><Plus aria-hidden="true" /> New secret</Button>
-        ) : (
+        ) : fixedProjectId ? null : (
           <Button size="lg" className="h-10 px-4 text-[13px]" nativeButton={false} render={<Link href="/dashboard/projects" />}>Create a project first</Button>
         )}
       </div>
 
       {rowError && <p className="vt-row-error" role="alert">{rowError}</p>}
 
+      {selectedIds.length > 0 && (
+        <div className="vt-bulkbar" role="region" aria-label="Bulk actions">
+          <span><ListChecks aria-hidden="true" /> {selectedIds.length} selected</span>
+          <div>
+            <Button type="button" size="sm" variant="outline" onClick={() => setBulkEditing(true)}><Pencil aria-hidden="true" /> Edit / move</Button>
+            <Button type="button" size="sm" variant="destructive" onClick={() => { setBulkError(null); setBulkDeleting(true); }}><Trash2 aria-hidden="true" /> Delete</Button>
+            <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())}><X aria-hidden="true" /> Clear</Button>
+          </div>
+        </div>
+      )}
+
       {secrets.length === 0 ? (
         <div className="vt-empty">
           <span className="vt-empty-icon"><KeyRound aria-hidden="true" /></span>
           <h3>{fixedProjectId ? "No secrets in this project yet" : "Your vault is empty"}</h3>
-          <p>{canAdd ? "Add an API key, token, webhook, or database URL. Its value is encrypted before it is saved." : "Secrets live inside projects. Create a project first, then add your first secret."}</p>
+          <p>
+            {canAdd
+              ? "Add an API key, token, webhook, or database URL. Its value is encrypted before it is saved."
+              : fixedProjectId
+                ? "You have view-only access to this project. An editor or the owner can add secrets."
+                : "Secrets live inside projects. Create a project first, then add your first secret."}
+          </p>
           {canAdd ? (
             <Button className="mt-1" onClick={() => setDialog({ kind: "new" })}><Plus aria-hidden="true" /> Add your first secret</Button>
-          ) : (
+          ) : fixedProjectId ? null : (
             <Button className="mt-1" nativeButton={false} render={<Link href="/dashboard/projects" />}>Go to Projects</Button>
           )}
         </div>
@@ -166,9 +254,49 @@ export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds 
           <p>Try a different search or clear the filters.</p>
           {hasFilters && <Button variant="outline" className="mt-1" onClick={() => { setQuery(""); setProjectFilter(""); setEnvironmentFilter(""); setTypeFilter(""); }}>Clear filters</Button>}
         </div>
+      ) : view === "environments" ? (
+        <div className="ev" role="table" aria-label="Secrets by environment">
+          <div className="ev-head" role="row">
+            <span role="columnheader">Name</span>
+            {ENVIRONMENTS.map((env) => <span role="columnheader" key={env.value}>{env.label}</span>)}
+          </div>
+          {rows.map((row) => {
+            const missing = ENVIRONMENTS.filter((env) => !row.byEnv[env.value]);
+            return (
+              <div className="ev-row" role="row" key={row.name.toLowerCase()} data-gap={missing.length > 0 || undefined}>
+                <div role="cell" className="vt-name">
+                  <b>{row.name}</b>
+                  <small>{missing.length ? `Missing in ${missing.map((env) => env.label).join(", ")}` : "In every environment"}</small>
+                </div>
+                {ENVIRONMENTS.map((env) => {
+                  const secret = row.byEnv[env.value];
+                  return (
+                    <div role="cell" className="ev-cell" data-label={env.label} key={env.value}>
+                      {secret ? (
+                        <>
+                          <div className="vt-value">{valueCells(secret)}</div>
+                          {secretMenu(secret)}
+                        </>
+                      ) : canAdd ? (
+                        <Button type="button" variant="outline" size="xs" onClick={() => setDialog({ kind: "new", prefill: { name: row.name, environment: env.value } })}>
+                          <Plus aria-hidden="true" /> Add
+                        </Button>
+                      ) : (
+                        <span className="ev-none">Not set</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className={`vt${fixedProjectId ? " vt-noproject" : ""}`} role="table" aria-label="Secrets">
           <div className="vt-head" role="row">
+            <span role="columnheader">
+              {selectable.length > 0 && <input type="checkbox" className="vt-checkbox" aria-label="Select all shown secrets" checked={allVisibleSelected} onChange={toggleAllVisible} />}
+            </span>
             <span role="columnheader">Name</span>
             {!fixedProjectId && <span role="columnheader">Project</span>}
             <span role="columnheader">Environment</span>
@@ -177,40 +305,25 @@ export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds 
             <span role="columnheader"><span className="sr-only">Actions</span></span>
           </div>
 
-          {visible.map((secret) => {
-            const shown = revealed[secret.id];
-            return (
-              <div className="vt-row" role="row" key={secret.id}>
-                <div role="cell" className="vt-name"><b>{secret.name}</b><small>{secretTypeLabel(secret.type)}</small></div>
-                {!fixedProjectId && (
-                  <div role="cell" className="vt-project" data-label="Project">
-                    <Link href={`/dashboard/projects/${secret.projectId}`}>{projectName(secret.projectId)}</Link>
-                  </div>
+          {visible.map((secret) => (
+            <div className="vt-row" role="row" key={secret.id} data-selected={selected.has(secret.id) || undefined}>
+              <div role="cell" className="vt-select">
+                {canChange(secret) && (
+                  <input type="checkbox" className="vt-checkbox" aria-label={`Select ${secret.name}`} checked={selected.has(secret.id)} onChange={() => toggleSelected(secret.id)} />
                 )}
-                <div role="cell" data-label="Environment"><span className="vt-env" data-env={secret.environment}>{environmentLabel(secret.environment)}</span></div>
-                <div role="cell" className="vt-value" data-label="Value">
-                  <code className={shown !== undefined ? "is-revealed" : undefined} aria-live="polite">{shown ?? MASK}</code>
-                  <Button type="button" variant="ghost" size="icon-xs" aria-label={shown !== undefined ? `Hide ${secret.name}` : `Reveal ${secret.name}`} onClick={() => toggleReveal(secret.id)} disabled={busyId === secret.id}>
-                    {shown !== undefined ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
-                  </Button>
-                  <Button type="button" variant="ghost" size="icon-xs" aria-label={`Copy ${secret.name}`} onClick={() => copy(secret.id)} disabled={busyId === secret.id}>
-                    {copiedId === secret.id ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-                  </Button>
-                </div>
-                <div role="cell" className="vt-date" data-label="Updated">{formatDate(secret.updatedAt)}</div>
-                <div role="cell" className="vt-actions">
-                  <DropdownMenu>
-                    <DropdownMenuTrigger className="vt-icon-button" aria-label={`Actions for ${secret.name}`}><MoreHorizontal aria-hidden="true" /></DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-44">
-                      <DropdownMenuItem onClick={() => setDialog({ kind: "edit", secret })}><Pencil aria-hidden="true" /> Edit</DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem variant="destructive" onClick={() => { setDeleteError(null); setDeleting(secret); }}><Trash2 aria-hidden="true" /> Delete</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
               </div>
-            );
-          })}
+              <div role="cell" className="vt-name"><b>{secret.name}</b><small>{secretTypeLabel(secret.type)}</small></div>
+              {!fixedProjectId && (
+                <div role="cell" className="vt-project" data-label="Project">
+                  <Link href={`/dashboard/projects/${secret.projectId}`}>{projectName(secret.projectId)}</Link>
+                </div>
+              )}
+              <div role="cell" data-label="Environment"><span className="vt-env" data-env={secret.environment}>{environmentLabel(secret.environment)}</span></div>
+              <div role="cell" className="vt-value" data-label="Value">{valueCells(secret)}</div>
+              <div role="cell" className="vt-date" data-label="Updated">{formatDate(secret.updatedAt)}</div>
+              <div role="cell" className="vt-actions">{secretMenu(secret)}</div>
+            </div>
+          ))}
         </div>
       )}
 
@@ -222,7 +335,31 @@ export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds 
         projects={projects}
         defaultProjectId={fixedProjectId ?? (projectFilter || undefined)}
         secret={dialog?.kind === "edit" ? dialog.secret : undefined}
+        prefill={dialog?.kind === "new" ? dialog.prefill : undefined}
         onSaved={hide}
+      />
+
+      <HistoryDialog secret={history} onOpenChange={(open) => !open && setHistory(null)} revealSeconds={revealSeconds} canRestore={history ? canChange(history) : false} onRestored={hide} />
+
+      <EnvTransferDialog
+        mode={transfer}
+        onOpenChange={(open) => !open && setTransfer(null)}
+        projects={projects}
+        defaultProjectId={fixedProjectId ?? (projectFilter || undefined)}
+        defaultEnvironment={(environmentFilter || undefined) as Environment | undefined}
+      />
+
+      <BulkEditDialog open={bulkEditing} onOpenChange={setBulkEditing} ids={selectedIds} projects={movableProjects} onDone={afterBulk} />
+
+      <ConfirmDialog
+        open={bulkDeleting}
+        onOpenChange={setBulkDeleting}
+        title={`Delete ${selectedIds.length} ${selectedIds.length === 1 ? "secret" : "secrets"}?`}
+        description="This permanently deletes the selected secrets, their stored values and their history. This can’t be undone."
+        confirmLabel="Delete secrets"
+        pending={bulkPending}
+        error={bulkError}
+        onConfirm={confirmBulkDelete}
       />
 
       <ConfirmDialog

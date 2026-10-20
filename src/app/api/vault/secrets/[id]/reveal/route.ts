@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
+import { secretAccess } from "@/db/access";
 import { parseObjectId } from "@/db/collections";
 import { revealSecret } from "@/db/secrets";
-import { apiError, authorize, handleError, noStore } from "@/lib/api-guard";
+import { apiError, authorize, handleError, noStore, requireRole } from "@/lib/api-guard";
 import { rateLimit } from "@/lib/request-guard";
 
 type Context = { params: Promise<{ id: string }> };
@@ -25,7 +26,10 @@ export async function POST(request: Request, { params }: Context) {
   if (!id) return apiError("Secret not found.", 404);
 
   try {
-    const value = await revealSecret(auth.userId, id);
+    const access = await secretAccess(auth.userId, id);
+    const denied = requireRole(access, "read", "Secret not found.");
+    if (denied || !access) return denied!;
+    const value = await revealSecret(access.ownerId, auth.actor, id);
     return value === null ? apiError("Secret not found.", 404) : NextResponse.json({ value }, { headers: noStore });
   } catch (error) {
     return handleError(error);

@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { FolderKanban, KeyRound, LayoutDashboard, Settings, ShieldCheck, type LucideIcon } from "lucide-react";
+import { Activity, FolderKanban, KeyRound, LayoutDashboard, Settings, ShieldCheck, type LucideIcon } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { Mark } from "@/modules/landing/icons";
 
-export type NavKey = "overview" | "vault" | "projects" | "settings" | "admin";
+export type NavKey = "overview" | "vault" | "projects" | "activity" | "settings" | "admin";
 
 type NavItem = { key?: NavKey; label: string; icon: LucideIcon; href?: string };
 
@@ -13,6 +13,7 @@ const items: NavItem[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard, href: "/dashboard" },
   { key: "vault", label: "Vault", icon: KeyRound, href: "/dashboard/vault" },
   { key: "projects", label: "Projects", icon: FolderKanban, href: "/dashboard/projects" },
+  { key: "activity", label: "Activity", icon: Activity, href: "/dashboard/activity" },
   { key: "settings", label: "Settings", icon: Settings, href: "/dashboard/settings" },
 ];
 
