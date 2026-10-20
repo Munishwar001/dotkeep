@@ -213,9 +213,10 @@ Form (auth-form.tsx)  ── POST /api/auth/signup { name, email, password } ─
    3. parseSignup()      → server par dobara validation
    4. hashPassword()     → password.ts
    5. createUser()       → users collection me save (duplicate email → 409)
-   6. Response 201. **Koi session ya cookie nahi banti**: signup login nahi karata.
+   6. Verification email bhejna (dekho [EMAIL_VERIFICATION_FLOW.md](EMAIL_VERIFICATION_FLOW.md))
+   7. Response 201. **Koi session ya cookie nahi banti**: signup login nahi karata.
 Form: response ok  →  router.push("/login?registered=1")
-Login page: "Your account is ready. Sign in to continue." dikhata hai
+Login page: "We sent a verification link..." dikhata hai. Email verify hone ke baad hi login chalta hai.
 ```
 
 ### Login

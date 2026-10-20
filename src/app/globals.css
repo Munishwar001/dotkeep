@@ -530,3 +530,12 @@ a.dash-tile { display: block; }
 .auth-success { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 20px; border: 1px solid #bfe3d0; background: #f1faf5; color: #1d6b49; border-radius: 8px; padding: 12px 14px; animation: rise .35s ease backwards; }
 .auth-success svg { width: 16px; height: 16px; flex: none; margin-top: 1px; }
 .auth-success p { margin: 0; font-size: 12.5px; line-height: 1.6; }
+
+/* Email verification */
+.auth-notice-line { margin: 0; color: #5b6478; font-size: 12.5px; text-align: center; }
+.auth-back-link { display: block; margin-top: 12px; text-align: center; color: var(--brand); font-size: 13px; font-weight: 500; }
+.auth-back-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.at-unverified { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 20px; border: 1px solid #f0dfb6; background: #fdf7e6; color: #8a6414; font: normal 10px var(--font-geist-mono), monospace; letter-spacing: .3px; text-transform: uppercase; vertical-align: 1px; }
+.st-verified { display: inline-flex; align-items: center; gap: 5px; color: #1d6b49; font-weight: 520; }
+.st-verified svg { width: 13px; height: 13px; }
+.auth-form { display: flex; flex-direction: column; gap: 16px; }

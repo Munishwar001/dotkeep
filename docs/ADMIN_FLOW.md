@@ -31,12 +31,12 @@ Page: `/dashboard/admin` (sidebar me **Admin**, sirf admin ko).
 
 | Cheez | Matlab |
 |---|---|
-| **Registered users** | Kul kitne accounts bane, aur kitne admin hain |
+| **Registered users** | Kul kitne accounts bane, kitne admin hain, aur kitne ne abhi tak email verify nahi kiya ("N unverified") |
 | **New in 7 days** | Pichle 7 din me kitne naye signup |
 | **Active in 24 hours** | Pichle 24 ghante me kitne alag-alag users ne login kiya (7 din ka number niche likha hota hai) |
 | **Total logins** | Kul login (sirf asli login, signup login nahi ginta, kyunki signup ke baad user ko login page par bheja jata hai) |
 | **Logins per day** | Pichle 14 din ka bar chart (UTC din ke hisaab se) |
-| **Users table** | Naam, email, role, joined, last login, logins, projects ki ginti, secrets ki ginti. Search aur 20-20 ke page |
+| **Users table** | Naam, email, role, joined, last login, logins, projects ki ginti, secrets ki ginti. Jis ne email verify nahi kiya uske naam ke bagal me **Unverified** ka nishaan. Search aur 20-20 ke page |
 
 ### Admin ko kya NAHI dikhta
 - Kisi ka secret, uska naam, ya value

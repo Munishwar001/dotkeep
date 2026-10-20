@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { CircleCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -37,7 +38,7 @@ export function ProfileForm({ name, email }: { name: string; email: string }) {
         <Field>
           <FieldLabel htmlFor="settings-email">Email</FieldLabel>
           <Input id="settings-email" className="h-10" value={email} disabled readOnly />
-          <FieldDescription>Changing your email isn’t available yet.</FieldDescription>
+          <FieldDescription><span className="st-verified"><CircleCheck aria-hidden="true" /> Verified</span> · Changing your email isn’t available yet.</FieldDescription>
         </Field>
         <div className="st-actions">
           <Button type="submit" disabled={status.kind === "saving"}>{status.kind === "saving" ? "Saving…" : "Save name"}</Button>

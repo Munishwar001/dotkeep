@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSession } from "@/db/sessions";
-import { findUserByEmail, normalizeEmail, recordLogin, toPublicUser } from "@/db/users";
+import { findUserByEmail, isEmailVerified, normalizeEmail, recordLogin, toPublicUser } from "@/db/users";
 import { parseLogin } from "@/lib/auth-input";
 import { deviceLabel } from "@/lib/device-label";
 import { isMongoConfigured } from "@/lib/mongodb";
@@ -38,6 +38,14 @@ export async function POST(request: Request) {
     // take the same time and give the same message.
     const valid = await verifyPassword(parsed.data.password, user?.passwordHash ?? null);
     if (!user || !valid) return NextResponse.json({ error: WRONG }, { status: 401 });
+
+    // Only reached with the RIGHT password, so this message tells a stranger nothing about who has an account.
+    if (!isEmailVerified(user)) {
+      return NextResponse.json(
+        { error: "Please verify your email before signing in. Check your inbox for the link.", code: "email_not_verified" },
+        { status: 403 },
+      );
+    }
 
     const { token, expiresAt } = await createSession(user._id, deviceLabel(request.headers.get("user-agent")));
     await recordLogin(user._id);

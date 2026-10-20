@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { createUser, EmailTakenError, toPublicUser } from "@/db/users";
 import { parseSignup } from "@/lib/auth-input";
+import { sendVerificationEmail } from "@/lib/email-verification";
 import { isMongoConfigured } from "@/lib/mongodb";
 import { hashPassword } from "@/lib/password";
 import { clientIp, isSameOriginJson, rateLimit } from "@/lib/request-guard";
 
-// POST /api/auth/signup  { name, email, password }  ->  creates the account. It does NOT log the user in:
-// no session and no cookie are created, so the person signs in on the login page afterwards.
+// POST /api/auth/signup  { name, email, password }  ->  creates the account and emails a verification link.
+// It does NOT log the user in: no session and no cookie. The email must be verified before the first sign-in.
 export async function POST(request: Request) {
   if (!isSameOriginJson(request)) return NextResponse.json({ error: "Invalid request." }, { status: 403 });
   if (!isMongoConfigured) {
@@ -30,7 +31,9 @@ export async function POST(request: Request) {
   try {
     const passwordHash = await hashPassword(parsed.data.password);
     const user = await createUser({ name: parsed.data.name, email: parsed.data.email, passwordHash });
-    return NextResponse.json({ user: toPublicUser(user) }, { status: 201 });
+    // If the email couldn't be sent the account still exists; the login page lets the person ask for a new link.
+    const sent = await sendVerificationEmail(user);
+    return NextResponse.json({ user: toPublicUser(user), emailSent: sent === "sent" }, { status: 201 });
   } catch (error) {
     if (error instanceof EmailTakenError) {
       return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });

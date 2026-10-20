@@ -51,3 +51,10 @@ export function parseLogin(body: unknown): Result<{ email: string; password: str
 
   return Object.keys(errors).length ? { ok: false, errors } : { ok: true, data: { email, password } };
 }
+
+export function parseEmailOnly(body: unknown): Result<{ email: string }> {
+  const input = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+  const email = text(input.email).trim();
+  const emailError = checkEmail(email);
+  return emailError ? { ok: false, errors: { email: emailError } } : { ok: true, data: { email } };
+}
