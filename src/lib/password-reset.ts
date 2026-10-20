@@ -1,3 +1,4 @@
+import { logError } from "./logger";
 import type { ObjectId } from "mongodb";
 import { cancelPasswordResets, createPasswordReset, RESET_MINUTES } from "@/db/password-resets";
 import type { SendResult } from "./email-verification";
@@ -27,7 +28,7 @@ export async function sendPasswordResetEmail(user: { _id: ObjectId; name: string
     });
     return "sent";
   } catch (error) {
-    console.error("password reset email failed", error instanceof Error ? error.message : error);
+    await logError(error, "password reset email failed");
     await cancelPasswordResets(user._id).catch(() => {});
     return "failed";
   }
@@ -48,6 +49,6 @@ export async function sendPasswordChangedEmail(user: { name: string; email: stri
       html: noticeEmailHtml({ name, paragraphs }),
     });
   } catch (error) {
-    console.error("password changed email failed", error instanceof Error ? error.message : error);
+    await logError(error, "password changed email failed");
   }
 }

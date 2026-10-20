@@ -1,3 +1,4 @@
+import { logError } from "@/lib/logger";
 import { after, NextResponse } from "next/server";
 import { updatePasswordHash } from "@/db/account";
 import { cancelVerifications } from "@/db/email-verifications";
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     after(() => sendPasswordChangedEmail(user));
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("reset-password failed", error);
+    await logError(error, "reset-password failed");
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }

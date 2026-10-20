@@ -1,0 +1,27 @@
+#!/bin/sh
+# Runs before every commit (installed by `npm install`, see scripts/install-hooks.mjs):
+#   1. ESLint on the files you are committing
+#   2. a TypeScript check of the whole project
+# Skipped when no code is staged. Unit tests and the build run in CI instead, to keep commits quick.
+# To bypass once in an emergency: git commit --no-verify
+
+staged() {
+  git diff --cached --name-only --diff-filter=ACMR -- '*.ts' '*.tsx' '*.mjs'
+}
+
+if [ -z "$(staged)" ]; then
+  exit 0
+fi
+
+echo "pre-commit: eslint on staged files"
+# -z / -0 keeps paths such as src/app/api/[id]/route.ts intact
+git diff --cached --name-only -z --diff-filter=ACMR -- '*.ts' '*.tsx' '*.mjs' | xargs -0 npx --no-install eslint --max-warnings=0 || {
+  echo "pre-commit: eslint failed. Fix the problems above, or run: npx eslint --fix <file>"
+  exit 1
+}
+
+echo "pre-commit: tsc"
+npx --no-install tsc --noEmit || {
+  echo "pre-commit: type check failed. Fix the errors above."
+  exit 1
+}

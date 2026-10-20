@@ -1,3 +1,4 @@
+import { logError } from "./logger";
 import type { ObjectId } from "mongodb";
 import { cancelVerifications, createVerification, VERIFICATION_HOURS } from "@/db/email-verifications";
 import { appUrl, sendMail } from "./mail";
@@ -30,7 +31,7 @@ export async function sendVerificationEmail(user: { _id: ObjectId; name: string;
     });
     return "sent";
   } catch (error) {
-    console.error("verification email failed", error instanceof Error ? error.message : error);
+    await logError(error, "verification email failed");
     await cancelVerifications(user._id).catch(() => {});
     return "failed";
   }

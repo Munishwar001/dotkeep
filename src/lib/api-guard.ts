@@ -1,3 +1,4 @@
+import { logError } from "./logger";
 import { ObjectId } from "mongodb";
 import { NextResponse } from "next/server";
 import type { Access, Actor } from "@/db/access";
@@ -33,6 +34,16 @@ export async function authorize(
 }
 
 /**
+ * For admin-only routes. Like authorize(), but anyone who isn't an admin gets 404 (as if the route didn't exist).
+ * The role comes from the database on every request, so removing someone's admin role takes effect at once.
+ */
+export async function authorizeAdmin(request: Request, options: { mutating: boolean }) {
+  const auth = await authorize(request, { ...options, vault: false });
+  if (auth instanceof Response) return auth;
+  return auth.user.role === "admin" ? auth : apiError("Not found.", 404);
+}
+
+/**
  * Checks the role a route needs: "read" (any role), "write" (owner or editor) or "owner".
  * No access at all is a 404, like something that doesn't exist; a viewer trying to change something gets a 403.
  * Returns an error Response, or null when it's fine.
@@ -45,10 +56,10 @@ export function requireRole(access: Access | null, need: "read" | "write" | "own
 }
 
 /** Turns expected database errors into friendly responses. Anything else is logged and becomes a 500. */
-export function handleError(error: unknown): Response {
+export async function handleError(error: unknown): Promise<Response> {
   if (error instanceof NameTakenError) return apiError(error.message, 409);
   if (error instanceof LimitError) return apiError(error.message, 422);
   if (error instanceof NotFoundError) return apiError(error.message, 404);
-  console.error("vault api error", error);
+  await logError(error, "vault api error");
   return apiError("Something went wrong. Please try again.", 500);
 }

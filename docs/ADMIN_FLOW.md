@@ -101,3 +101,23 @@ src/app/dashboard/admin/page.tsx  Admin page
 User ko delete, block ya role badalna UI se. Login ka device ya IP record. Email ko mask karna (`ab***@gmail.com`). Ye sab baad ke kaam hain.
 
 **Test:** 50 se zyada checks asli MongoDB aur asli Chrome ke saath hue (admin banna, access control, ginti, privacy, search, pages, turant demotion).
+
+---
+
+## 5. Block, delete aur email mask
+
+Users table me har user (admin ko chhodke) ke row par **"..."** menu hai.
+
+| Option | Kya hota hai |
+|---|---|
+| **Block** | User turant har jagah se logout (saari sessions delete). Sahi password ke baad bhi login par "This account has been blocked" aata hai. Uske projects aur secrets bache rehte hain. Row par **Blocked** nishaan aur stats me "N blocked" |
+| **Unblock** | Wapas login kar sakta hai |
+| **Delete account** | Account, uske saare projects aur secrets (jo dusron ke saath share the wo bhi), sessions, aur dusron ke projects me uski membership, sab permanently delete. Confirm popup aata hai. Wapas nahi aata |
+
+Rules:
+- Admin **apne aap par** ya **kisi dusre admin par** block/delete nahi chala sakta (403). Pehle `npm run remove-admin -- email` se admin role hatao. Isse "last admin delete ho gaya" jaisa hadsa bhi nahi hota.
+- Ye sab sirf admin ke liye hai. Non-admin ko in APIs par 404 milta hai: `PATCH/DELETE /api/admin/users/:id`, `PATCH /api/admin/preferences`.
+- Block/delete server log me likhe jaate hain (kaun admin, kis user par). Abhi alag admin audit log nahi hai.
+- Login par blocked ka message sirf **sahi password** ke baad aata hai, taaki bahar wala is se ye na jaan sake ki kiske paas account hai.
+
+**Email mask:** Users panel ke upar **Mask emails** button. On karne par dusron ke emails `j***@g***.com` jaise dikhte hain. Masking **server par** hoti hai, asli email browser tak jaata hi nahi. Mask on ho to search sirf **naam** par chalti hai (warna email guess karke pata chal jata). Ye har admin ki apni setting hai (default off).

@@ -13,7 +13,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import type { Collection, ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
-import { findUserById, type UserDoc } from "./users";
+import { findUserById, isBlocked, type UserDoc } from "./users";
 
 export const SESSION_DAYS = 7;
 
@@ -64,7 +64,9 @@ export async function findUserBySessionToken(token: string): Promise<UserDoc | n
   const sessions = await sessionsCollection();
   // The TTL cleanup runs only about once a minute, so we also check expiry ourselves.
   const session = await sessions.findOne({ tokenHash: hashToken(token), expiresAt: { $gt: new Date() } });
-  return session ? findUserById(session.userId) : null;
+  if (!session) return null;
+  const user = await findUserById(session.userId);
+  return user && !isBlocked(user) ? user : null; // blocked users are logged out even if a session survived
 }
 
 /** Logs out: deletes the session so the cookie stops working everywhere. */

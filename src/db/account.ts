@@ -19,6 +19,13 @@ export async function updatePasswordHash(userId: ObjectId, passwordHash: string)
   await users.updateOne({ _id: userId }, { $set: { passwordHash } });
 }
 
+/** Admin preference. The route checks the role: this function only stores the flag. */
+export async function updateMaskEmails(userId: ObjectId, maskEmails: boolean): Promise<boolean> {
+  const users = await usersCollection();
+  const { matchedCount } = await users.updateOne({ _id: userId }, { $set: { maskEmails } });
+  return matchedCount > 0;
+}
+
 export async function updateRevealSeconds(userId: ObjectId, seconds: number): Promise<boolean> {
   if (!(REVEAL_OPTIONS as readonly number[]).includes(seconds)) throw new RangeError("Unsupported reveal time.");
   const users = await usersCollection();

@@ -1,3 +1,4 @@
+import { logError } from "@/lib/logger";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { deleteSession } from "@/db/sessions";
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
     try {
       await deleteSession(token);
     } catch (error) {
-      console.error("logout: could not delete session", error);
+      await logError(error, "logout: could not delete session");
     }
   }
 

@@ -1,6 +1,7 @@
+import { logError } from "@/lib/logger";
 import { NextResponse } from "next/server";
 import { createSession } from "@/db/sessions";
-import { findUserByEmail, isEmailVerified, normalizeEmail, recordLogin, toPublicUser } from "@/db/users";
+import { findUserByEmail, isBlocked, isEmailVerified, normalizeEmail, recordLogin, toPublicUser } from "@/db/users";
 import { parseLogin } from "@/lib/auth-input";
 import { deviceLabel } from "@/lib/device-label";
 import { isMongoConfigured } from "@/lib/mongodb";
@@ -47,13 +48,18 @@ export async function POST(request: Request) {
       );
     }
 
+    // Also only after the right password, for the same reason.
+    if (isBlocked(user)) {
+      return NextResponse.json({ error: "This account has been blocked. Contact an administrator.", code: "account_blocked" }, { status: 403 });
+    }
+
     const { token, expiresAt } = await createSession(user._id, deviceLabel(request.headers.get("user-agent")));
     await recordLogin(user._id);
     const response = NextResponse.json({ user: toPublicUser(user) });
     response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(expiresAt));
     return response;
   } catch (error) {
-    console.error("login failed", error);
+    await logError(error, "login failed");
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }

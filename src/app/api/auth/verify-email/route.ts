@@ -1,3 +1,4 @@
+import { logError } from "@/lib/logger";
 import { NextResponse } from "next/server";
 import { consumeVerification } from "@/db/email-verifications";
 import { markEmailVerified } from "@/db/users";
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
     await markEmailVerified(userId);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    console.error("verify-email failed", error);
+    await logError(error, "verify-email failed");
     return NextResponse.json({ error: "Something went wrong. Please try again." }, { status: 500 });
   }
 }

@@ -4,6 +4,7 @@
  *
  * Whoever can open a project sees its log, including what the other members did.
  */
+import { logError } from "@/lib/logger";
 import type { ObjectId } from "mongodb";
 import { collections, type AuditAction, type SecretEventDoc } from "./collections";
 import type { Actor } from "./access";
@@ -42,7 +43,7 @@ export async function logEvents(ownerId: ObjectId, inputs: EventInput[]): Promis
       inputs.map(({ actor, ...input }) => ({ ...input, userId: ownerId, actorId: actor.id, actorName: actor.name, createdAt })) as SecretEventDoc[],
     );
   } catch (error) {
-    console.error("audit log write failed", error);
+    await logError(error, "audit log write failed");
   }
 }
 
