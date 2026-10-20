@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { CircleAlert, Eye, EyeOff, Info } from "lucide-react";
@@ -44,6 +45,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // After a correct password on an account whose email isn't verified yet: offer to send the link again.
+  const [needsVerification, setNeedsVerification] = useState(false);
+  const [resend, setResend] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   const errors = validate(mode, values);
   const visible = (field: keyof Values) => (touched[field] || submitted ? errors[field] : undefined);
@@ -53,6 +57,8 @@ export function AuthForm({ mode }: { mode: Mode }) {
     setValues((prev) => ({ ...prev, [field]: event.target.value }));
     setNotice(null);
     setFormError(null);
+    setNeedsVerification(false);
+    setResend("idle");
   };
   const blur = (field: keyof Values) => () => setTouched((prev) => ({ ...prev, [field]: true }));
 
@@ -72,19 +78,36 @@ export function AuthForm({ mode }: { mode: Mode }) {
         body: JSON.stringify(mode === "signup" ? values : { email: values.email, password: values.password }),
       });
 
+      const data = (await response.json().catch(() => null)) as { error?: string; code?: string; emailSent?: boolean } | null;
+
       if (response.ok) {
-        // Success: the server has set the session cookie. Go to the dashboard.
-        router.push("/dashboard");
+        // Signing up only creates the account and emails a link; the person verifies, then signs in on the login page.
+        // Signing in sets the session cookie, so go to the dashboard.
+        router.push(mode === "signup" ? `/login?registered=1${data?.emailSent === false ? "&mail=0" : ""}` : "/dashboard");
         router.refresh();
         return; // keep the button disabled while the page changes
       }
 
-      const data = (await response.json().catch(() => null)) as { error?: string } | null;
+      if (data?.code === "email_not_verified") setNeedsVerification(true);
       setFormError(data?.error ?? "Something went wrong. Please try again.");
     } catch {
       setFormError("We couldn’t reach the server. Check your connection and try again.");
     }
     setPending(false);
+  }
+
+  async function resendVerification() {
+    setResend("sending");
+    try {
+      const response = await fetch("/api/auth/resend-verification", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: values.email }),
+      });
+      setResend(response.ok ? "sent" : "error");
+    } catch {
+      setResend("error");
+    }
   }
 
   return (
@@ -108,7 +131,7 @@ export function AuthForm({ mode }: { mode: Mode }) {
           <div className="auth-label-row">
             <FieldLabel htmlFor="password">Password</FieldLabel>
             {mode === "login" && (
-              <button type="button" className="auth-link" onClick={() => setNotice("Password reset isn’t available yet.")}>Forgot password?</button>
+              <Link className="auth-link" href="/forgot-password">Forgot password?</Link>
             )}
           </div>
           <InputGroup className="h-10">
@@ -131,6 +154,14 @@ export function AuthForm({ mode }: { mode: Mode }) {
         {formError && (
           <div className="auth-alert" role="alert"><CircleAlert aria-hidden="true" /><p>{formError}</p></div>
         )}
+        {needsVerification && resend === "idle" && (
+          <Button type="button" variant="outline" className="h-10 w-full" onClick={resendVerification}>Resend verification email</Button>
+        )}
+        {needsVerification && resend === "sending" && <p className="auth-notice-line">Sending…</p>}
+        {needsVerification && resend === "sent" && (
+          <div className="auth-success" style={{ marginBottom: 0 }} role="status"><Info aria-hidden="true" /><p>If your account is waiting for verification, a new link is on its way. It can take a minute.</p></div>
+        )}
+        {needsVerification && resend === "error" && <p className="auth-notice-line">We couldn’t send that. Please try again in a minute.</p>}
         {notice && (
           <div className="auth-notice" role="status"><Info aria-hidden="true" /><p>{notice}</p></div>
         )}

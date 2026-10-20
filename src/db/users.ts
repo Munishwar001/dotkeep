@@ -24,6 +24,10 @@ export type UserDoc = {
   lastLoginAt?: Date;
   loginCount?: number;
   revealSeconds?: number; // Settings -> Vault preference. Missing = REVEAL_SECONDS.
+  // Email verification. New users are created with emailVerified: false. Users from before this existed have no
+  // field at all, and "missing" counts as verified so nobody gets locked out.
+  emailVerified?: boolean;
+  emailVerifiedAt?: Date;
 };
 
 export type Role = "user" | "admin";
@@ -32,7 +36,7 @@ export type Role = "user" | "admin";
 export type NewUser = { name: string; email: string; passwordHash: string };
 
 /** A user that is safe to send to the browser: no password hash. */
-export type PublicUser = { id: string; name: string; email: string; role: Role; revealSeconds: number; createdAt: Date };
+export type PublicUser = { id: string; name: string; email: string; role: Role; revealSeconds: number; emailVerified: boolean; createdAt: Date };
 
 /** Thrown by createUser() when the email is already registered. */
 export class EmailTakenError extends Error {
@@ -49,9 +53,14 @@ export function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+/** True unless the account was created after verification existed and is still unconfirmed. */
+export function isEmailVerified(user: Pick<UserDoc, "emailVerified">): boolean {
+  return user.emailVerified !== false;
+}
+
 /** Strips the password hash. Always use this before returning a user to the browser. */
 export function toPublicUser(user: UserDoc): PublicUser {
-  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", revealSeconds: user.revealSeconds ?? REVEAL_SECONDS, createdAt: user.createdAt };
+  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", revealSeconds: user.revealSeconds ?? REVEAL_SECONDS, emailVerified: isEmailVerified(user), createdAt: user.createdAt };
 }
 
 // The unique index on `email` is what really stops two accounts with the same email, even if two
@@ -77,6 +86,7 @@ export async function createUser(input: NewUser): Promise<UserDoc> {
     email: normalizeEmail(input.email),
     passwordHash: input.passwordHash,
     role: "user" as Role, // nobody becomes admin through the website, see scripts/admin-role.mjs
+    emailVerified: false, // confirmed through the emailed link, see src/db/email-verifications.ts
     loginCount: 0,
     createdAt: new Date(),
   };
@@ -106,7 +116,7 @@ export async function findUserById(id: ObjectId): Promise<UserDoc | null> {
 }
 
 /**
- * Remembers that a user just logged in (also called after signup, which logs the user in).
+ * Remembers that a user just logged in (called by the login route only; signing up does not log you in).
  * It must never break a login, so a failure here is logged and swallowed.
  */
 export async function recordLogin(userId: ObjectId): Promise<void> {
@@ -118,4 +128,11 @@ export async function recordLogin(userId: ObjectId): Promise<void> {
   } catch (error) {
     console.error("could not record login", error);
   }
+}
+
+/** Marks the email as confirmed. Called only after a valid, unused verification link was presented. */
+export async function markEmailVerified(userId: ObjectId): Promise<boolean> {
+  const users = await usersCollection();
+  const { matchedCount } = await users.updateOne({ _id: userId }, { $set: { emailVerified: true, emailVerifiedAt: new Date() } });
+  return matchedCount > 0;
 }

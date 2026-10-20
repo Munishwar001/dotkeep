@@ -51,3 +51,20 @@ export function parseLogin(body: unknown): Result<{ email: string; password: str
 
   return Object.keys(errors).length ? { ok: false, errors } : { ok: true, data: { email, password } };
 }
+
+export function parseEmailOnly(body: unknown): Result<{ email: string }> {
+  const input = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+  const email = text(input.email).trim();
+  const emailError = checkEmail(email);
+  return emailError ? { ok: false, errors: { email: emailError } } : { ok: true, data: { email } };
+}
+
+export function parseReset(body: unknown): Result<{ token: string; password: string }> {
+  const input = (typeof body === "object" && body !== null ? body : {}) as Record<string, unknown>;
+  const token = text(input.token);
+  const password = text(input.password);
+  if (!token || token.length > 200) return { ok: false, errors: { password: "This link is invalid or has expired." } };
+  if (password.length < MIN_PASSWORD_LENGTH) return { ok: false, errors: { password: `Use at least ${MIN_PASSWORD_LENGTH} characters.` } };
+  if (password.length > MAX_PASSWORD_LENGTH) return { ok: false, errors: { password: `Use at most ${MAX_PASSWORD_LENGTH} characters.` } };
+  return { ok: true, data: { token, password } };
+}

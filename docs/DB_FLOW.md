@@ -213,9 +213,10 @@ Form (auth-form.tsx)  ── POST /api/auth/signup { name, email, password } ─
    3. parseSignup()      → server par dobara validation
    4. hashPassword()     → password.ts
    5. createUser()       → users collection me save (duplicate email → 409)
-   6. createSession()    → sessions collection me token-hash save
-   7. Response + Set-Cookie: dotkeep_session=<token>
-Form: response ok  →  router.push("/dashboard")
+   6. Verification email bhejna (dekho [EMAIL_VERIFICATION_FLOW.md](EMAIL_VERIFICATION_FLOW.md))
+   7. Response 201. **Koi session ya cookie nahi banti**: signup login nahi karata.
+Form: response ok  →  router.push("/login?registered=1")
+Login page: "We sent a verification link..." dikhata hai. Email verify hone ke baad hi login chalta hai.
 ```
 
 ### Login
@@ -275,7 +276,7 @@ Session database se delete hota hai, to purani cookie kisi bhi device par ab kaa
 - [x] Users collection ([users.ts](../src/db/users.ts)) aur password hashing ([password.ts](../src/lib/password.ts))
 - [x] Sessions ([sessions.ts](../src/db/sessions.ts)) aur cookie ([session.ts](../src/lib/session.ts))
 - [x] Signup, Login, Logout routes ([src/app/api/auth/](../src/app/api/auth/))
-- [x] Forms routes se jude hain, login/signup ke baad `/dashboard`
+- [x] Forms routes se jude hain. Signup ke baad `/login`, login ke baad `/dashboard`
 - [x] `/dashboard` protected hai (proxy + session check)
 
 **Abhi nahi bana**

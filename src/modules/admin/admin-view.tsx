@@ -9,10 +9,10 @@ const reveal = (i: number) => ({ "--i": i }) as React.CSSProperties;
 
 export function StatTiles({ stats }: { stats: AdminStats }) {
   const tiles = [
-    { label: "Registered users", value: stats.totalUsers, hint: `${stats.admins} admin${stats.admins === 1 ? "" : "s"}` },
+    { label: "Registered users", value: stats.totalUsers, hint: `${stats.admins} admin${stats.admins === 1 ? "" : "s"}${stats.unverified ? ` · ${stats.unverified} unverified` : ""}` },
     { label: "New in 7 days", value: stats.newUsers7d, hint: "Signed up this week" },
     { label: "Active in 24 hours", value: stats.active24h, hint: `${stats.active7d} in the last 7 days` },
-    { label: "Total logins", value: stats.totalLogins, hint: "Including sign-ups" },
+    { label: "Total logins", value: stats.totalLogins, hint: "All time" },
   ];
   return (
     <section className="dash-stats is-four" aria-label="User statistics">
@@ -93,7 +93,7 @@ export function UsersTable({ users, total, page, pages, query }: { users: AdminU
           </div>
           {users.map((user) => (
             <div className="at-row" role="row" key={user.id}>
-              <div role="cell" className="at-user"><b>{user.name}</b><small>{user.email}</small></div>
+              <div role="cell" className="at-user"><b>{user.name}{!user.emailVerified && <span className="at-unverified">Unverified</span>}</b><small>{user.email}</small></div>
               <div role="cell" data-label="Role">
                 {user.role === "admin" ? <span className="at-role"><ShieldCheck aria-hidden="true" /> Admin</span> : <span className="at-plain">User</span>}
               </div>

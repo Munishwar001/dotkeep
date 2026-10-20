@@ -20,6 +20,7 @@ export type AdminStats = {
   active7d: number;
   totalLogins: number;
   admins: number;
+  unverified: number; // signed up but never confirmed their email
   loginsByDay: { date: string; count: number }[]; // last 14 days, oldest first, UTC days
 };
 
@@ -29,10 +30,11 @@ export async function getAdminStats(): Promise<AdminStats> {
   const startOfToday = new Date(new Date(now).toISOString().slice(0, 10) + "T00:00:00.000Z").getTime();
   const chartStart = new Date(startOfToday - 13 * DAY);
 
-  const [totalUsers, newUsers7d, admins, loginTotals, active24, active7, perDay] = await Promise.all([
+  const [totalUsers, newUsers7d, admins, unverified, loginTotals, active24, active7, perDay] = await Promise.all([
     users.countDocuments({}),
     users.countDocuments({ createdAt: { $gte: new Date(now - 7 * DAY) } }),
     users.countDocuments({ role: "admin" }),
+    users.countDocuments({ emailVerified: false }),
     users.aggregate<{ n: number }>([{ $group: { _id: null, n: { $sum: { $ifNull: ["$loginCount", 0] } } } }]).toArray(),
     events.distinct("userId", { at: { $gte: new Date(now - DAY) } }),
     events.distinct("userId", { at: { $gte: new Date(now - 7 * DAY) } }),
@@ -54,6 +56,7 @@ export async function getAdminStats(): Promise<AdminStats> {
     totalUsers,
     newUsers7d,
     admins,
+    unverified,
     active24h: active24.length,
     active7d: active7.length,
     totalLogins: loginTotals[0]?.n ?? 0,
@@ -66,6 +69,7 @@ export type AdminUserRow = {
   name: string;
   email: string;
   role: "user" | "admin";
+  emailVerified: boolean;
   createdAt: string;
   lastLoginAt: string | null;
   loginCount: number;
@@ -109,6 +113,7 @@ export async function listAdminUsers(options: { query?: string; page: number }):
       name: doc.name,
       email: doc.email,
       role: doc.role ?? "user",
+      emailVerified: doc.emailVerified !== false,
       createdAt: doc.createdAt.toISOString(),
       lastLoginAt: doc.lastLoginAt ? doc.lastLoginAt.toISOString() : null,
       loginCount: doc.loginCount ?? 0,

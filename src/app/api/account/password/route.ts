@@ -1,11 +1,12 @@
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { updatePasswordHash } from "@/db/account";
 import { revokeOtherSessions } from "@/db/sessions";
 import { findUserById } from "@/db/users";
 import { parsePasswordChange } from "@/lib/account-input";
 import { apiError, authorize, handleError, noStore } from "@/lib/api-guard";
 import { hashPassword, verifyPassword } from "@/lib/password";
+import { sendPasswordChangedEmail } from "@/lib/password-reset";
 import { rateLimit } from "@/lib/request-guard";
 import { SESSION_COOKIE } from "@/lib/session-cookie";
 
@@ -36,6 +37,7 @@ export async function POST(request: Request) {
     await updatePasswordHash(auth.userId, await hashPassword(parsed.data.newPassword));
     const currentToken = (await cookies()).get(SESSION_COOKIE)?.value;
     const signedOut = await revokeOtherSessions(auth.userId, currentToken);
+    after(() => sendPasswordChangedEmail(user)); // tell the owner, in case it wasn't them
     return NextResponse.json({ ok: true, signedOut }, { headers: noStore });
   } catch (error) {
     return handleError(error);
