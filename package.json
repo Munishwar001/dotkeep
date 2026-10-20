@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "make-admin": "node --env-file=.env.local scripts/admin-role.mjs grant",
+    "remove-admin": "node --env-file=.env.local scripts/admin-role.mjs revoke"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

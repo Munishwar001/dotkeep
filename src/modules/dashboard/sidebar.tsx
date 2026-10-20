@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { FolderKanban, KeyRound, LayoutDashboard, Settings, type LucideIcon } from "lucide-react";
+import { Suspense } from "react";
+import { FolderKanban, KeyRound, LayoutDashboard, Settings, ShieldCheck, type LucideIcon } from "lucide-react";
+import { getCurrentUser } from "@/lib/session";
 import { Mark } from "@/modules/landing/icons";
 
-export type NavKey = "overview" | "vault" | "projects";
+export type NavKey = "overview" | "vault" | "projects" | "admin";
 
 type NavItem = { key?: NavKey; label: string; icon: LucideIcon; href?: string };
 
@@ -13,6 +15,17 @@ const items: NavItem[] = [
   { key: "projects", label: "Projects", icon: FolderKanban, href: "/dashboard/projects" },
   { label: "Settings", icon: Settings },
 ];
+
+/** The Admin link exists only for admins. Nobody else even sees that the page is there. */
+async function AdminNavItem({ active }: { active: NavKey }) {
+  const user = await getCurrentUser();
+  if (user?.role !== "admin") return null;
+  return (
+    <Link className={`dash-nav-item${active === "admin" ? " is-active" : ""}`} href="/dashboard/admin" aria-current={active === "admin" ? "page" : undefined}>
+      <ShieldCheck aria-hidden="true" /> Admin
+    </Link>
+  );
+}
 
 export function Sidebar({ active }: { active: NavKey }) {
   return (
@@ -33,6 +46,10 @@ export function Sidebar({ active }: { active: NavKey }) {
             </span>
           ),
         )}
+        {/* Reads the session cookie (request-time data), so it streams in inside Suspense. */}
+        <Suspense fallback={null}>
+          <AdminNavItem active={active} />
+        </Suspense>
       </nav>
 
       <p className="dash-side-note">Early days. More of Dotkeep is on the way.</p>

@@ -9,6 +9,7 @@
  */
 import type { Collection, ObjectId } from "mongodb";
 import { getDb } from "@/lib/mongodb";
+import { recordLoginEvent } from "./login-events";
 
 /** One document in the `users` collection, exactly as it is stored. */
 export type UserDoc = {
@@ -17,13 +18,19 @@ export type UserDoc = {
   email: string; // always stored lowercase, see normalizeEmail()
   passwordHash: string; // the hash, never the real password
   createdAt: Date;
+  // Added later. Older users don't have these fields, so everything reading them treats "missing" as the default.
+  role?: Role; // missing = "user". Only the make-admin script can set "admin".
+  lastLoginAt?: Date;
+  loginCount?: number;
 };
+
+export type Role = "user" | "admin";
 
 /** What the caller must provide to create a user. */
 export type NewUser = { name: string; email: string; passwordHash: string };
 
 /** A user that is safe to send to the browser: no password hash. */
-export type PublicUser = { id: string; name: string; email: string; createdAt: Date };
+export type PublicUser = { id: string; name: string; email: string; role: Role; createdAt: Date };
 
 /** Thrown by createUser() when the email is already registered. */
 export class EmailTakenError extends Error {
@@ -42,7 +49,7 @@ export function normalizeEmail(email: string) {
 
 /** Strips the password hash. Always use this before returning a user to the browser. */
 export function toPublicUser(user: UserDoc): PublicUser {
-  return { id: user._id.toString(), name: user.name, email: user.email, createdAt: user.createdAt };
+  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", createdAt: user.createdAt };
 }
 
 // The unique index on `email` is what really stops two accounts with the same email, even if two
@@ -50,7 +57,7 @@ export function toPublicUser(user: UserDoc): PublicUser {
 // server start. If it fails (e.g. database unreachable) we forget the result and retry next time.
 let indexReady: Promise<unknown> | null = null;
 
-async function usersCollection(): Promise<Collection<UserDoc>> {
+export async function usersCollection(): Promise<Collection<UserDoc>> {
   const users = getDb().collection<UserDoc>(COLLECTION_NAME);
   indexReady ??= users.createIndex({ email: 1 }, { unique: true }).catch((error) => {
     indexReady = null;
@@ -67,6 +74,8 @@ export async function createUser(input: NewUser): Promise<UserDoc> {
     name: input.name.trim(),
     email: normalizeEmail(input.email),
     passwordHash: input.passwordHash,
+    role: "user" as Role, // nobody becomes admin through the website, see scripts/admin-role.mjs
+    loginCount: 0,
     createdAt: new Date(),
   };
 
@@ -92,4 +101,19 @@ export async function findUserByEmail(email: string): Promise<UserDoc | null> {
 export async function findUserById(id: ObjectId): Promise<UserDoc | null> {
   const users = await usersCollection();
   return users.findOne({ _id: id });
+}
+
+/**
+ * Remembers that a user just logged in (also called after signup, which logs the user in).
+ * It must never break a login, so a failure here is logged and swallowed.
+ */
+export async function recordLogin(userId: ObjectId): Promise<void> {
+  try {
+    const users = await usersCollection();
+    const now = new Date();
+    await users.updateOne({ _id: userId }, { $set: { lastLoginAt: now }, $inc: { loginCount: 1 } });
+    await recordLoginEvent(userId, now);
+  } catch (error) {
+    console.error("could not record login", error);
+  }
 }

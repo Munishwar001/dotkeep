@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createSession } from "@/db/sessions";
-import { createUser, EmailTakenError, toPublicUser } from "@/db/users";
+import { createUser, EmailTakenError, recordLogin, toPublicUser } from "@/db/users";
 import { parseSignup } from "@/lib/auth-input";
 import { isMongoConfigured } from "@/lib/mongodb";
 import { hashPassword } from "@/lib/password";
@@ -32,6 +32,7 @@ export async function POST(request: Request) {
     const passwordHash = await hashPassword(parsed.data.password);
     const user = await createUser({ name: parsed.data.name, email: parsed.data.email, passwordHash });
     const { token, expiresAt } = await createSession(user._id);
+    await recordLogin(user._id); // signing up also logs the user in
 
     const response = NextResponse.json({ user: toPublicUser(user) }, { status: 201 });
     response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(expiresAt));
