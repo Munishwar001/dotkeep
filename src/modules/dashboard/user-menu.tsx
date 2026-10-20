@@ -1,8 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { ChevronsUpDown, LogOut } from "lucide-react";
+import { ChevronsUpDown, FolderKanban, KeyRound, LayoutDashboard, LogOut, Settings, ShieldCheck } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +20,7 @@ function initials(name: string) {
   return letters.join("") || "?";
 }
 
-export function UserMenu({ name, email }: { name: string; email: string }) {
+export function UserMenu({ name, email, role }: { name: string; email: string; role: "user" | "admin" }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
 
@@ -33,6 +34,15 @@ export function UserMenu({ name, email }: { name: string; email: string }) {
       router.refresh();
     }
   }
+
+  // On small screens the sidebar is hidden, so the menu carries the navigation links (hidden on desktop by CSS).
+  const links = [
+    { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+    { href: "/dashboard/vault", label: "Vault", icon: KeyRound },
+    { href: "/dashboard/projects", label: "Projects", icon: FolderKanban },
+    { href: "/dashboard/settings", label: "Settings", icon: Settings },
+    ...(role === "admin" ? [{ href: "/dashboard/admin", label: "Admin", icon: ShieldCheck }] : []),
+  ];
 
   return (
     <DropdownMenu>
@@ -48,6 +58,12 @@ export function UserMenu({ name, email }: { name: string; email: string }) {
             <small>{email}</small>
           </DropdownMenuLabel>
         </DropdownMenuGroup>
+        <DropdownMenuSeparator className="dash-menu-nav" />
+        {links.map(({ href, label, icon: LinkIcon }) => (
+          <DropdownMenuItem key={href} className="dash-menu-nav" render={<Link href={href} />}>
+            <LinkIcon aria-hidden="true" /> {label}
+          </DropdownMenuItem>
+        ))}
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={signOut} disabled={pending}>
           <LogOut aria-hidden="true" /> {pending ? "Signing out…" : "Sign out"}

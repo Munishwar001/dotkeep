@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createSession } from "@/db/sessions";
 import { findUserByEmail, normalizeEmail, recordLogin, toPublicUser } from "@/db/users";
 import { parseLogin } from "@/lib/auth-input";
+import { deviceLabel } from "@/lib/device-label";
 import { isMongoConfigured } from "@/lib/mongodb";
 import { verifyPassword } from "@/lib/password";
 import { clientIp, isSameOriginJson, rateLimit } from "@/lib/request-guard";
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
     const valid = await verifyPassword(parsed.data.password, user?.passwordHash ?? null);
     if (!user || !valid) return NextResponse.json({ error: WRONG }, { status: 401 });
 
-    const { token, expiresAt } = await createSession(user._id);
+    const { token, expiresAt } = await createSession(user._id, deviceLabel(request.headers.get("user-agent")));
     await recordLogin(user._id);
     const response = NextResponse.json({ user: toPublicUser(user) });
     response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(expiresAt));

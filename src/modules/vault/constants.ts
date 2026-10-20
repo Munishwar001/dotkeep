@@ -27,8 +27,9 @@ export const LIMITS = {
   secretValue: 10_000,
 } as const;
 
-/** A revealed value hides itself again after this many seconds. */
+/** A revealed value hides itself again after this many seconds. Users can pick another one in Settings. */
 export const REVEAL_SECONDS = 15;
+export const REVEAL_OPTIONS = [5, 15, 30, 60] as const;
 
 export const environmentLabel = (value: string) => ENVIRONMENTS.find((e) => e.value === value)?.label ?? value;
 export const secretTypeLabel = (value: string) => SECRET_TYPES.find((t) => t.value === value)?.label ?? value;

@@ -20,13 +20,15 @@ type SecretsTableProps = {
   projects: ProjectOption[];
   /** On a project's own page: only that project's secrets, and no Project column or filter. */
   fixedProjectId?: string;
+  /** How long a revealed value stays visible. It is the user's own setting (Settings -> Vault). */
+  revealSeconds?: number;
 };
 
 type DialogState = { kind: "new" } | { kind: "edit"; secret: PublicSecret } | null;
 
 const MASK = "••••••••••••";
 
-export function SecretsTable({ secrets, projects, fixedProjectId }: SecretsTableProps) {
+export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds = REVEAL_SECONDS }: SecretsTableProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [projectFilter, setProjectFilter] = useState("");
@@ -88,7 +90,7 @@ export function SecretsTable({ secrets, projects, fixedProjectId }: SecretsTable
     const value = await fetchValue(id);
     if (value === null) return;
     setRevealed((current) => ({ ...current, [id]: value }));
-    hideTimers.current[id] = window.setTimeout(() => hide(id), REVEAL_SECONDS * 1000);
+    hideTimers.current[id] = window.setTimeout(() => hide(id), revealSeconds * 1000);
   }
 
   async function copy(id: string) {
@@ -212,7 +214,7 @@ export function SecretsTable({ secrets, projects, fixedProjectId }: SecretsTable
         </div>
       )}
 
-      <p className="vt-note">Values are masked by default and hide again {REVEAL_SECONDS} seconds after you reveal them.</p>
+      <p className="vt-note">Values are masked by default and hide again {revealSeconds} seconds after you reveal them.</p>
 
       <SecretDialog
         open={dialog !== null}

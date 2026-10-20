@@ -4,7 +4,7 @@ import { FolderKanban, KeyRound, LayoutDashboard, Settings, ShieldCheck, type Lu
 import { getCurrentUser } from "@/lib/session";
 import { Mark } from "@/modules/landing/icons";
 
-export type NavKey = "overview" | "vault" | "projects" | "admin";
+export type NavKey = "overview" | "vault" | "projects" | "settings" | "admin";
 
 type NavItem = { key?: NavKey; label: string; icon: LucideIcon; href?: string };
 
@@ -13,7 +13,7 @@ const items: NavItem[] = [
   { key: "overview", label: "Overview", icon: LayoutDashboard, href: "/dashboard" },
   { key: "vault", label: "Vault", icon: KeyRound, href: "/dashboard/vault" },
   { key: "projects", label: "Projects", icon: FolderKanban, href: "/dashboard/projects" },
-  { label: "Settings", icon: Settings },
+  { key: "settings", label: "Settings", icon: Settings, href: "/dashboard/settings" },
 ];
 
 /** The Admin link exists only for admins. Nobody else even sees that the page is there. */

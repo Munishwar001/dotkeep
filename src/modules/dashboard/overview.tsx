@@ -14,7 +14,7 @@ export function Topbar({ user, title }: { user: PublicUser; title: string }) {
     <header className="dash-top">
       <Link className="wordmark dash-top-logo" href="/" aria-label="Dotkeep home"><Mark /><span>dotkeep</span></Link>
       <span className="dash-crumb">{title}</span>
-      <UserMenu name={user.name} email={user.email} />
+      <UserMenu name={user.name} email={user.email} role={user.role} />
     </header>
   );
 }
