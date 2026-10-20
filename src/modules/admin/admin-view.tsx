@@ -12,7 +12,7 @@ export function StatTiles({ stats }: { stats: AdminStats }) {
     { label: "Registered users", value: stats.totalUsers, hint: `${stats.admins} admin${stats.admins === 1 ? "" : "s"}` },
     { label: "New in 7 days", value: stats.newUsers7d, hint: "Signed up this week" },
     { label: "Active in 24 hours", value: stats.active24h, hint: `${stats.active7d} in the last 7 days` },
-    { label: "Total logins", value: stats.totalLogins, hint: "Including sign-ups" },
+    { label: "Total logins", value: stats.totalLogins, hint: "All time" },
   ];
   return (
     <section className="dash-stats is-four" aria-label="User statistics">

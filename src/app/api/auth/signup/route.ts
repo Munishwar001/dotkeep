@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
-import { createSession } from "@/db/sessions";
-import { createUser, EmailTakenError, recordLogin, toPublicUser } from "@/db/users";
+import { createUser, EmailTakenError, toPublicUser } from "@/db/users";
 import { parseSignup } from "@/lib/auth-input";
-import { deviceLabel } from "@/lib/device-label";
 import { isMongoConfigured } from "@/lib/mongodb";
 import { hashPassword } from "@/lib/password";
 import { clientIp, isSameOriginJson, rateLimit } from "@/lib/request-guard";
-import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
 
-// POST /api/auth/signup  { name, email, password }  ->  creates the account and logs the user in.
+// POST /api/auth/signup  { name, email, password }  ->  creates the account. It does NOT log the user in:
+// no session and no cookie are created, so the person signs in on the login page afterwards.
 export async function POST(request: Request) {
   if (!isSameOriginJson(request)) return NextResponse.json({ error: "Invalid request." }, { status: 403 });
   if (!isMongoConfigured) {
@@ -32,12 +30,7 @@ export async function POST(request: Request) {
   try {
     const passwordHash = await hashPassword(parsed.data.password);
     const user = await createUser({ name: parsed.data.name, email: parsed.data.email, passwordHash });
-    const { token, expiresAt } = await createSession(user._id, deviceLabel(request.headers.get("user-agent")));
-    await recordLogin(user._id); // signing up also logs the user in
-
-    const response = NextResponse.json({ user: toPublicUser(user) }, { status: 201 });
-    response.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(expiresAt));
-    return response;
+    return NextResponse.json({ user: toPublicUser(user) }, { status: 201 });
   } catch (error) {
     if (error instanceof EmailTakenError) {
       return NextResponse.json({ error: "An account with this email already exists." }, { status: 409 });

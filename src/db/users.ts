@@ -106,7 +106,7 @@ export async function findUserById(id: ObjectId): Promise<UserDoc | null> {
 }
 
 /**
- * Remembers that a user just logged in (also called after signup, which logs the user in).
+ * Remembers that a user just logged in (called by the login route only; signing up does not log you in).
  * It must never break a login, so a failure here is logged and swallowed.
  */
 export async function recordLogin(userId: ObjectId): Promise<void> {

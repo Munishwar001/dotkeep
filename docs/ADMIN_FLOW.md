@@ -14,9 +14,9 @@ npm run remove-admin -- tumhara@email.com    # admin hatao
 ```
 
 Steps:
-1. Pehle website par `/signup` se normal account banao.
+1. Pehle website par `/signup` se normal account banao. Signup ke baad tum **login page** par pahunchoge.
 2. Terminal me upar wali command chalao (apna email daalo).
-3. Browser me dobara `/dashboard` kholo. Sidebar me **Admin** dikhega.
+3. Login page par sign in karo. Sidebar me **Admin** dikhega.
 
 Command `.env.local` se `MONGODB_URI` padhti hai. Admin banne ya hatne ka asar **turant** hota hai, dobara login nahi karna padta.
 
@@ -34,7 +34,7 @@ Page: `/dashboard/admin` (sidebar me **Admin**, sirf admin ko).
 | **Registered users** | Kul kitne accounts bane, aur kitne admin hain |
 | **New in 7 days** | Pichle 7 din me kitne naye signup |
 | **Active in 24 hours** | Pichle 24 ghante me kitne alag-alag users ne login kiya (7 din ka number niche likha hota hai) |
-| **Total logins** | Kul login. Signup bhi ek login gina jata hai, kyunki signup ke baad user login ho jata hai |
+| **Total logins** | Kul login (sirf asli login, signup login nahi ginta, kyunki signup ke baad user ko login page par bheja jata hai) |
 | **Logins per day** | Pichle 14 din ka bar chart (UTC din ke hisaab se) |
 | **Users table** | Naam, email, role, joined, last login, logins, projects ki ginti, secrets ki ginti. Search aur 20-20 ke page |
 

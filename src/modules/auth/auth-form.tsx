@@ -73,8 +73,9 @@ export function AuthForm({ mode }: { mode: Mode }) {
       });
 
       if (response.ok) {
-        // Success: the server has set the session cookie. Go to the dashboard.
-        router.push("/dashboard");
+        // Signing up only creates the account. The person signs in on the login page, which shows a "created" note.
+        // Signing in sets the session cookie, so go to the dashboard.
+        router.push(mode === "signup" ? "/login?registered=1" : "/dashboard");
         router.refresh();
         return; // keep the button disabled while the page changes
       }

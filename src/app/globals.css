@@ -525,3 +525,8 @@ a.dash-tile { display: block; }
   .st-section { grid-template-columns: minmax(0, 1fr); gap: 20px; padding: 26px 22px; }
   .st-section-body, .st-section-body.is-wide { max-width: none; }
 }
+
+/* Login: "your account is ready" note after signing up */
+.auth-success { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 20px; border: 1px solid #bfe3d0; background: #f1faf5; color: #1d6b49; border-radius: 8px; padding: 12px 14px; animation: rise .35s ease backwards; }
+.auth-success svg { width: 16px; height: 16px; flex: none; margin-top: 1px; }
+.auth-success p { margin: 0; font-size: 12.5px; line-height: 1.6; }
