@@ -17,11 +17,11 @@ export async function POST(request: Request) {
   const email = normalizeEmail(parsed.data.email);
 
   // Limits are keyed by what was typed, not by whether an account exists, so they reveal nothing either.
-  const tooMany = (key: string, max: number) => {
-    const limit = rateLimit(key, max, 60 * 60 * 1000);
+  const tooMany = async (key: string, max: number) => {
+    const limit = await rateLimit(key, max, 60 * 60 * 1000);
     return limit.ok ? null : NextResponse.json({ error: "Too many requests. Try again later." }, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });
   };
-  const blocked = tooMany(`resend-ip:${clientIp(request)}`, 10) ?? tooMany(`resend-email:${email}`, 5);
+  const blocked = (await tooMany(`resend-ip:${clientIp(request)}`, 10)) ?? (await tooMany(`resend-email:${email}`, 5));
   if (blocked) return blocked;
 
   // The lookup and the sending happen after the response, so a real unverified account and an unknown

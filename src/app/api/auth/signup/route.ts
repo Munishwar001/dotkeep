@@ -15,7 +15,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Sign-up is unavailable: the database isn’t configured." }, { status: 503 });
   }
 
-  const limit = rateLimit(`signup:${clientIp(request)}`, 10, 60 * 60 * 1000);
+  const limit = await rateLimit(`signup:${clientIp(request)}`, 10, 60 * 60 * 1000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many sign-up attempts. Try again later." },

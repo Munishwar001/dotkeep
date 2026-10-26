@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   }
 
   // Slows down password guessing: 10 tries per 15 minutes for each IP + email pair.
-  const limit = rateLimit(`login:${clientIp(request)}:${normalizeEmail(parsed.data.email)}`, 10, 15 * 60 * 1000);
+  const limit = await rateLimit(`login:${clientIp(request)}:${normalizeEmail(parsed.data.email)}`, 10, 15 * 60 * 1000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Wait a few minutes and try again." },

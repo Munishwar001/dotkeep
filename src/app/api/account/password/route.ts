@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   if (auth instanceof Response) return auth;
 
   // Slows down someone with a stolen session trying to guess the current password.
-  const limit = rateLimit(`password:${auth.userId.toString()}`, 5, 15 * 60 * 1000);
+  const limit = await rateLimit(`password:${auth.userId.toString()}`, 5, 15 * 60 * 1000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Wait a few minutes and try again." },

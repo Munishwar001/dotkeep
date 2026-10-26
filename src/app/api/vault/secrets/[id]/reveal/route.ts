@@ -14,7 +14,7 @@ export async function POST(request: Request, { params }: Context) {
   const auth = await authorize(request, { mutating: true });
   if (auth instanceof Response) return auth;
 
-  const limit = rateLimit(`reveal:${auth.userId.toString()}`, 30, 60 * 1000);
+  const limit = await rateLimit(`reveal:${auth.userId.toString()}`, 30, 60 * 1000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many reveals. Wait a moment and try again." },
