@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { isGoogleConfigured } from "@/lib/google-oauth";
 import { AuthForm } from "@/modules/auth/auth-form";
 import { AuthShell } from "@/modules/auth/auth-shell";
+import { GoogleButton } from "@/modules/auth/google-button";
 import { RegisteredNotice } from "@/modules/auth/registered-notice";
 
 export const metadata: Metadata = {
@@ -16,6 +18,7 @@ export default function LoginPage() {
       <Suspense fallback={null}>
         <RegisteredNotice />
       </Suspense>
+      {isGoogleConfigured() && <GoogleButton />}
       <AuthForm mode="login" />
     </AuthShell>
   );

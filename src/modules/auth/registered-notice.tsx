@@ -9,9 +9,22 @@ import { CircleAlert, CircleCheck } from "lucide-react";
  *   ?registered=1&mail=0   just signed up, but the email could not be sent
  *   ?verified=1            just confirmed the email
  *   ?reset=1               just chose a new password
+ *   ?error=...             a Google sign-in did not finish, see GOOGLE_ERRORS
  */
+const GOOGLE_ERRORS: Record<string, string> = {
+  google_denied: "Google sign-in was cancelled.",
+  google_failed: "We couldn’t sign you in with Google. Please try again.",
+  google_unverified: "Your Google email address isn’t verified, so we can’t use it to sign you in.",
+  google_unavailable: "Google sign-in isn’t available right now.",
+  blocked: "This account has been blocked. Contact an administrator.",
+  too_many: "Too many attempts. Wait a few minutes and try again.",
+};
+
 export function RegisteredNotice() {
   const params = useSearchParams();
+
+  const error = params.get("error");
+  if (error && GOOGLE_ERRORS[error]) return <Note tone="error">{GOOGLE_ERRORS[error]}</Note>;
 
   if (params.get("reset") === "1") {
     return <Note>Password updated. Sign in with your new password.</Note>;
