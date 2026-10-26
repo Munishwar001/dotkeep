@@ -33,6 +33,8 @@ export type UserDoc = {
   blockedAt?: Date;
   // Admin preference: show other users' emails masked (j***@g***.com) on the Admin page. Missing = false.
   maskEmails?: boolean;
+  // Google's stable id for this person (the `sub` claim), set once they sign in with Google. Missing = never used Google.
+  googleId?: string;
 };
 
 export type Role = "user" | "admin";
@@ -77,7 +79,11 @@ let indexReady: Promise<unknown> | null = null;
 
 export async function usersCollection(): Promise<Collection<UserDoc>> {
   const users = getDb().collection<UserDoc>(COLLECTION_NAME);
-  indexReady ??= users.createIndex({ email: 1 }, { unique: true }).catch((error) => {
+  indexReady ??= Promise.all([
+    users.createIndex({ email: 1 }, { unique: true }),
+    // One Google account can belong to only one Dotkeep user. Partial, so users without googleId don't collide.
+    users.createIndex({ googleId: 1 }, { unique: true, partialFilterExpression: { googleId: { $type: "string" } } }),
+  ]).catch((error) => {
     indexReady = null;
     throw error;
   });
@@ -142,4 +148,50 @@ export async function markEmailVerified(userId: ObjectId): Promise<boolean> {
   const users = await usersCollection();
   const { matchedCount } = await users.updateOne({ _id: userId }, { $set: { emailVerified: true, emailVerifiedAt: new Date() } });
   return matchedCount > 0;
+}
+
+/** Finds the user who signed in with this Google account, or null. */
+export async function findUserByGoogleId(googleId: string): Promise<UserDoc | null> {
+  const users = await usersCollection();
+  return users.findOne({ googleId });
+}
+
+/**
+ * Creates a user from a verified Google profile. Google already confirmed the email, so it starts verified.
+ * `passwordHash` is the hash of a random password nobody knows: the person gets in through Google, or sets a real
+ * password later with "Forgot password".
+ */
+export async function createGoogleUser(input: { name: string; email: string; googleId: string; passwordHash: string }): Promise<UserDoc> {
+  const users = await usersCollection();
+  const now = new Date();
+  const doc = {
+    name: input.name.trim(),
+    email: normalizeEmail(input.email),
+    passwordHash: input.passwordHash,
+    role: "user" as Role,
+    emailVerified: true,
+    emailVerifiedAt: now,
+    googleId: input.googleId,
+    loginCount: 0,
+    createdAt: now,
+  };
+  try {
+    const { insertedId } = await users.insertOne(doc as UserDoc);
+    return { ...doc, _id: insertedId };
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "code" in error && error.code === 11000) throw new EmailTakenError();
+    throw error;
+  }
+}
+
+/**
+ * Attaches a Google account to an existing user and marks the email verified (Google just proved it).
+ * Pass `passwordHash` to also replace the password, used when the account was never verified (see the Google callback).
+ */
+export async function linkGoogleAccount(userId: ObjectId, googleId: string, passwordHash?: string): Promise<void> {
+  const users = await usersCollection();
+  await users.updateOne(
+    { _id: userId },
+    { $set: { googleId, emailVerified: true, emailVerifiedAt: new Date(), ...(passwordHash ? { passwordHash } : {}) } },
+  );
 }

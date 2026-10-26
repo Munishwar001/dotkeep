@@ -111,3 +111,9 @@ export async function revokeOtherSessions(userId: ObjectId, currentToken: string
   const { deletedCount } = await sessions.deleteMany({ userId, ...keep });
   return deletedCount;
 }
+
+/** Ends every session of the user, everywhere. */
+export async function deleteAllSessions(userId: ObjectId): Promise<void> {
+  const sessions = await sessionsCollection();
+  await sessions.deleteMany({ userId });
+}
