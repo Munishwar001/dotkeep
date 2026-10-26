@@ -49,7 +49,7 @@ async function AdminContent({ searchParams }: { searchParams: SearchParams }) {
 
 export default function AdminPage({ searchParams }: { searchParams: SearchParams }) {
   return (
-    <DashboardFrame active="admin">
+    <DashboardFrame>
       <AdminContent searchParams={searchParams} />
     </DashboardFrame>
   );

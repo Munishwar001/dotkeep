@@ -30,7 +30,7 @@ async function OverviewContent() {
 
 export default function DashboardPage() {
   return (
-    <DashboardFrame active="overview">
+    <DashboardFrame>
       <OverviewContent />
     </DashboardFrame>
   );

@@ -58,7 +58,7 @@ async function ProjectsContent() {
 
 export default function ProjectsPage() {
   return (
-    <DashboardFrame active="projects">
+    <DashboardFrame>
       <ProjectsContent />
     </DashboardFrame>
   );

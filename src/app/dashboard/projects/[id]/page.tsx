@@ -70,7 +70,7 @@ async function ProjectContent({ params }: { params: Promise<{ id: string }> }) {
 
 export default function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   return (
-    <DashboardFrame active="projects">
+    <DashboardFrame>
       <ProjectContent params={params} />
     </DashboardFrame>
   );
