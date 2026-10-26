@@ -637,3 +637,10 @@ a.dash-tile { display: block; }
 .st-verified { display: inline-flex; align-items: center; gap: 5px; color: #1d6b49; font-weight: 520; }
 .st-verified svg { width: 13px; height: 13px; }
 .auth-form { display: flex; flex-direction: column; gap: 16px; }
+
+/* Continue with Google */
+.auth-google { display: flex; align-items: center; justify-content: center; gap: 10px; height: 44px; width: 100%; border: 1px solid #d9dde5; border-radius: 8px; background: #fff; color: var(--ink); font-size: 13px; font-weight: 520; transition: background-color .2s ease, border-color .2s ease, box-shadow .2s ease; }
+.auth-google:hover { background: #f8fafc; border-color: #b8c8f2; box-shadow: 0 2px 8px #1a202a14; }
+.auth-google svg { width: 18px; height: 18px; flex: none; }
+.auth-divider { display: flex; align-items: center; gap: 12px; margin: 20px 0; color: #8a91a3; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; }
+.auth-divider::before, .auth-divider::after { content: ""; flex: 1; height: 1px; background: #e2e5ea; }
