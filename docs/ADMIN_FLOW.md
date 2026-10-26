@@ -20,8 +20,31 @@ Steps:
 
 Command `.env.local` se `MONGODB_URI` padhti hai. Admin banne ya hatne ka asar **turant** hota hai, dobara login nahi karna padta.
 
+### Kaunsa database? (local ya production)
+
+`make-admin` wahi database badalta hai jis par `.env.local` ki `MONGODB_URI` aur `MONGODB_DB` point karti hain. Isliye pehle dekh lo ki abhi kahan point kar rahi hai:
+
+| `.env.local` me | Admin banega |
+|---|---|
+| `mongodb://localhost:27017/` | Local database me |
+| `mongodb+srv://...mongodb.net/` (Atlas) | Atlas (production) me |
+
+**Production (Atlas) me admin banana:**
+1. Deploy ki hui site par `/signup` se account banao, aur email ka verify link kholo. Google se sign in kiya to email apne aap verified hota hai.
+2. `.env.local` me kuch der ke liye Atlas wali `MONGODB_URI` aur `MONGODB_DB=dotkeep` rakho.
+3. Command chalao:
+   ```bash
+   npm run make-admin -- tumhara@email.com
+   ```
+4. Output me `Done: ... is now an admin` aaye to `.env.local` ko turant wapas local wali values par kar do. Production ki URI local file me chhodna risky hai, `npm run dev` se production ka data badal sakta hai.
+5. Site par page refresh karo. Sidebar me **Admin** dikhega.
+
+Agar `No user with the email ...` aaye to ya to us database me wo user hai hi nahi (galat database par ho), ya email me spelling galat hai.
+
+Atlas se connect na ho to Atlas me **Network Access** me tumhara IP allowed hona chahiye.
+
 ### Ye tareeka kyun?
-Abhi signup par email verify nahi hota. Agar `.env` me `ADMIN_EMAIL=...` rakhte, to jo bhi pehle us email se signup kar leta wo admin ban jata, chahe wo email uska na ho. Isliye admin banane ka koi web rasta hai hi nahi. Signup me `role: "admin"` bhejne par bhi wo ignore hota hai (test me check kiya).
+Agar `.env` me `ADMIN_EMAIL=...` rakhte, to jo bhi pehle us email se signup kar leta wo admin ban jata, chahe wo email uska na ho (email verify hone se pehle bhi account ban jata hai). Isliye admin banane ka koi web rasta hai hi nahi, aur koi "pehla user admin" ya "default admin" bhi nahi hai. Signup me `role: "admin"` bhejne par bhi wo ignore hota hai (test me check kiya).
 
 ---
 
