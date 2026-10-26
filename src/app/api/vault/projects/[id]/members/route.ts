@@ -31,7 +31,7 @@ export async function POST(request: Request, { params }: Context) {
   const auth = await authorize(request, { mutating: true });
   if (auth instanceof Response) return auth;
 
-  const limit = rateLimit(`invite:${auth.userId.toString()}`, 20, 60 * 60 * 1000);
+  const limit = await rateLimit(`invite:${auth.userId.toString()}`, 20, 60 * 60 * 1000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many invitations. Try again later." },

@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const auth = await authorize(request, { mutating: true });
   if (auth instanceof Response) return auth;
 
-  const limit = rateLimit(`export:${auth.userId.toString()}`, 10, 60 * 1000);
+  const limit = await rateLimit(`export:${auth.userId.toString()}`, 10, 60 * 1000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many exports. Wait a moment and try again." },

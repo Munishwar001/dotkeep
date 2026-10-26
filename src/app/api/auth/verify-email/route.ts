@@ -12,7 +12,7 @@ export async function POST(request: Request) {
   if (!isSameOriginJson(request)) return NextResponse.json({ error: "Invalid request." }, { status: 403 });
   if (!isMongoConfigured) return NextResponse.json({ error: "Verification is unavailable: the database isn’t configured." }, { status: 503 });
 
-  const limit = rateLimit(`verify:${clientIp(request)}`, 30, 10 * 60 * 1000);
+  const limit = await rateLimit(`verify:${clientIp(request)}`, 30, 10 * 60 * 1000);
   if (!limit.ok) {
     return NextResponse.json({ error: "Too many attempts. Try again in a few minutes." }, { status: 429, headers: { "Retry-After": String(limit.retryAfter) } });
   }

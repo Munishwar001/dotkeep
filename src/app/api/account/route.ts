@@ -13,7 +13,7 @@ export async function DELETE(request: Request) {
   if (auth instanceof Response) return auth;
 
   // Shares its counter with the password-change route: both let you guess the password.
-  const limit = rateLimit(`password:${auth.userId.toString()}`, 5, 15 * 60 * 1000);
+  const limit = await rateLimit(`password:${auth.userId.toString()}`, 5, 15 * 60 * 1000);
   if (!limit.ok) {
     return NextResponse.json(
       { error: "Too many attempts. Wait a few minutes and try again." },
