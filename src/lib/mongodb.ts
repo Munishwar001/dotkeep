@@ -12,8 +12,9 @@ declare global {
 /** Shared MongoDB client. It connects lazily on the first query, not when this file is imported. */
 export function getMongoClient() {
   if (!uri) throw new Error("MONGODB_URI is not set. See .env.local.");
-  // Fail fast (5s) instead of the 30s default when the database can't be reached.
-  globalThis.__dotkeepMongoClient ??= new MongoClient(uri, { serverSelectionTimeoutMS: 5000 });
+  // Fail fast (5s) instead of the 30s default when the database can't be reached. The pool is kept small because on
+  // Vercel every server instance has its own pool, and Atlas's free tier allows only 500 connections in total.
+  globalThis.__dotkeepMongoClient ??= new MongoClient(uri, { serverSelectionTimeoutMS: 5000, maxPoolSize: 10, maxIdleTimeMS: 60_000 });
   return globalThis.__dotkeepMongoClient;
 }
 

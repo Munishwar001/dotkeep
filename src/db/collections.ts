@@ -91,6 +91,7 @@ function ensureIndexes(
     // the same secret name is fine in different environments (DATABASE_URL in local and in production)
     secrets.createIndex({ userId: 1, projectId: 1, environment: 1, nameKey: 1 }, { unique: true }),
     secrets.createIndex({ userId: 1, updatedAt: -1 }),
+    secrets.createIndex({ projectId: 1, updatedAt: -1 }), // listing the secrets of a (shared) project, newest first
     versions.createIndex({ userId: 1, secretId: 1, createdAt: -1 }),
     events.createIndex({ userId: 1, createdAt: -1 }),
     events.createIndex({ userId: 1, secretId: 1, createdAt: -1 }),
