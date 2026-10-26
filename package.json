@@ -6,14 +6,22 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "next typegen && tsc --noEmit",
+    "prepare": "node scripts/install-hooks.mjs",
+    "test": "node --env-file-if-exists=.env.local --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"tests/**/*.test.mjs\"",
+    "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"tests/unit/*.test.mjs\"",
+    "make-admin": "node --env-file=.env.local scripts/admin-role.mjs grant",
+    "remove-admin": "node --env-file=.env.local scripts/admin-role.mjs revoke"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.57.0",
+    "mongodb": "^7.7.0",
     "next": "16.4.1",
+    "nodemailer": "^10.1.7",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "shadcn": "^4.21.5",
@@ -23,6 +31,7 @@
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
     "@types/node": "^20",
+    "@types/nodemailer": "^8.0.2",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
