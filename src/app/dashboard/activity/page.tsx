@@ -41,7 +41,7 @@ async function ActivityContent() {
 
 export default function ActivityPage() {
   return (
-    <DashboardFrame active="activity">
+    <DashboardFrame>
       <ActivityContent />
     </DashboardFrame>
   );

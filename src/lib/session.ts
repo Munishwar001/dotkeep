@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { findUserBySessionToken } from "@/db/sessions";
 import { toPublicUser, type PublicUser } from "@/db/users";
 import { isMongoConfigured } from "./mongodb";
@@ -17,11 +18,15 @@ export function sessionCookieOptions(expiresAt: Date) {
   };
 }
 
-/** The logged-in user for the current request, or null. Use this in Server Components. */
-export async function getCurrentUser(): Promise<PublicUser | null> {
+/**
+ * The logged-in user for the current request, or null. Use this in Server Components.
+ * cache() makes it run once per request: the sidebar, the page and the top bar all ask for the user, and without it
+ * each of them would repeat the two database lookups (session, then user).
+ */
+export const getCurrentUser = cache(async (): Promise<PublicUser | null> => {
   if (!isMongoConfigured) return null;
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const user = await findUserBySessionToken(token);
   return user ? toPublicUser(user) : null;
-}
+});

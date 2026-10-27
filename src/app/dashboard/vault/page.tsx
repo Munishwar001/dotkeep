@@ -40,7 +40,7 @@ async function VaultContent() {
 
 export default function VaultPage() {
   return (
-    <DashboardFrame active="vault">
+    <DashboardFrame>
       <VaultContent />
     </DashboardFrame>
   );

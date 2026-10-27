@@ -66,7 +66,7 @@ async function SettingsContent() {
 
 export default function SettingsPage() {
   return (
-    <DashboardFrame active="settings">
+    <DashboardFrame>
       <SettingsContent />
     </DashboardFrame>
   );
