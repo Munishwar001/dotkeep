@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { secretAccess } from "@/db/access";
 import { parseObjectId } from "@/db/collections";
 import { revealSecret } from "@/db/secrets";
-import { apiError, authorize, handleError, noStore, requireRole } from "@/lib/api-guard";
+import { apiError, authorize, handleError, noStore, requireRole, requireStepUp } from "@/lib/api-guard";
 import { rateLimit } from "@/lib/request-guard";
 
 type Context = { params: Promise<{ id: string }> };
@@ -13,6 +13,8 @@ type Context = { params: Promise<{ id: string }> };
 export async function POST(request: Request, { params }: Context) {
   const auth = await authorize(request, { mutating: true });
   if (auth instanceof Response) return auth;
+  const stepUp = await requireStepUp(auth);
+  if (stepUp) return stepUp;
 
   const limit = await rateLimit(`reveal:${auth.userId.toString()}`, 30, 60 * 1000);
   if (!limit.ok) {

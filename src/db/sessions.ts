@@ -16,12 +16,17 @@ import { getDb } from "@/lib/mongodb";
 import { findUserById, isBlocked, type UserDoc } from "./users";
 
 export const SESSION_DAYS = 7;
+/** How long one correct code keeps secret values available before the next one is asked for. */
+export const STEP_UP_MINUTES = 10;
 
 type SessionDoc = {
   _id: ObjectId;
   tokenHash: string; // sha256 of the cookie token
   userId: ObjectId;
   label?: string; // e.g. "Chrome on Windows". Older sessions don't have one.
+  // Accounts with 2FA must re-enter a code before secret values come out (see requireStepUp). Until this moment the
+  // session counts as "recently verified". Missing = not verified, so a session left open must prove itself again.
+  stepUpUntil?: Date;
   createdAt: Date;
   expiresAt: Date;
 };
@@ -49,14 +54,32 @@ export async function sessionsCollection(): Promise<Collection<SessionDoc>> {
   return sessions;
 }
 
-/** Creates a session for a user. Give `token` to the browser as a cookie; it is not stored anywhere else. */
-export async function createSession(userId: ObjectId, label?: string): Promise<{ token: string; expiresAt: Date }> {
+const stepUpEnd = (now: Date) => new Date(now.getTime() + STEP_UP_MINUTES * 60 * 1000);
+
+/**
+ * Creates a session for a user. Give `token` to the browser as a cookie; it is not stored anywhere else.
+ * `verified` is for a sign-in that just passed a 2FA code: that code already proved the person, so don't ask again at once.
+ */
+export async function createSession(userId: ObjectId, label?: string, options: { verified?: boolean } = {}): Promise<{ token: string; expiresAt: Date }> {
   const sessions = await sessionsCollection();
   const token = randomBytes(32).toString("base64url");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_DAYS * 24 * 60 * 60 * 1000);
-  await sessions.insertOne({ tokenHash: hashToken(token), userId, label, createdAt: now, expiresAt } as SessionDoc);
+  await sessions.insertOne({ tokenHash: hashToken(token), userId, label, createdAt: now, expiresAt, ...(options.verified ? { stepUpUntil: stepUpEnd(now) } : {}) } as SessionDoc);
   return { token, expiresAt };
+}
+
+/** Marks this session as just verified with a 2FA code. */
+export async function markStepUp(token: string): Promise<void> {
+  const sessions = await sessionsCollection();
+  await sessions.updateOne({ tokenHash: hashToken(token) }, { $set: { stepUpUntil: stepUpEnd(new Date()) } });
+}
+
+/** True while this session's last 2FA code is recent enough. */
+export async function hasRecentStepUp(token: string): Promise<boolean> {
+  const sessions = await sessionsCollection();
+  const now = new Date();
+  return (await sessions.countDocuments({ tokenHash: hashToken(token), expiresAt: { $gt: now }, stepUpUntil: { $gt: now } })) > 0;
 }
 
 /** Returns the logged-in user for a cookie token, or null if the token is unknown or expired. */

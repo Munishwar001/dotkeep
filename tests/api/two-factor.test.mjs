@@ -24,7 +24,7 @@ before(async () => {
   // Sign in once the normal way (2FA is still off) to get a session for Settings.
   assert.equal((await person.login()).status, 200);
 });
-const clearLimits = () => world.db.collection("rateLimits").deleteMany({ _id: { $in: [`2fa-settings:${person.id}`, `2fa:user:${person.id}`] } });
+const clearLimits = () => world.db.collection("rateLimits").deleteMany({ _id: { $in: [`2fa-settings:${person.id}`, `2fa:user:${person.id}`, `2fa-stepup:${person.id}`] } });
 after(async () => {
   await clearLimits();
   await world.db.collection("twoFactorChallenges").deleteMany({ userId: person.objectId });
@@ -115,6 +115,101 @@ describe("signing in", () => {
   });
 });
 
+describe("protecting secret values with a code (opt-in)", () => {
+  let project, secret;
+  before(clearLimits); // the sections above already used some of the 10 tries per 15 minutes
+  const expire = () => world.db.collection("sessions").updateMany({ userId: person.objectId }, { $unset: { stepUpUntil: "" } });
+  const reveal = (who = person) => who.call("POST", `/api/vault/secrets/${secret.id}/reveal`);
+  const exportEnv = () => person.call("POST", "/api/vault/export", { projectId: project.id, environment: "production" });
+  const lock = (body) => person.call("POST", "/api/account/2fa/secrets-lock", body);
+
+  before(async () => {
+    project = (await person.call("POST", "/api/vault/projects", { name: "TF", description: "" })).data.project;
+    secret = (await person.call("POST", "/api/vault/secrets", { projectId: project.id, name: "TOKEN", environment: "production", type: "other", value: "s3cret" })).data.secret;
+  });
+
+  it("is off by default: 2FA alone doesn't change how reveal works", async () => {
+    await expire();
+    assert.equal((await userDoc()).secretsNeedCode, undefined);
+    const res = await reveal();
+    assert.equal(res.status, 200);
+    assert.equal(res.data.value, "s3cret");
+  });
+
+  it("can't be switched on without 2FA", async () => {
+    const plain = await world.user("nofa");
+    assert.equal((await plain.call("POST", "/api/account/2fa/secrets-lock", { enabled: true })).status, 409);
+  });
+
+  it("switches on with one request", async () => {
+    assert.equal((await lock({ enabled: "yes" })).status, 400);
+    assert.equal((await lock({ enabled: true })).status, 200);
+    assert.equal((await userDoc()).secretsNeedCode, true);
+  });
+
+  it("then refuses reveal, version reveal and export without a recent code, with a code the page can act on", async () => {
+    await expire();
+    for (const res of [
+      await reveal(),
+      await person.call("POST", `/api/vault/secrets/${secret.id}/versions/${"0".repeat(24)}/reveal`),
+      await exportEnv(),
+    ]) {
+      assert.equal(res.status, 403);
+      assert.equal(res.data.code, "step_up_required");
+      assert.ok(!JSON.stringify(res.data).includes("s3cret"));
+    }
+  });
+
+  it("still lets you see names and everything that isn't a value", async () => {
+    const res = await person.call("GET", `/api/vault/secrets?projectId=${project.id}`);
+    assert.equal(res.status, 200);
+    assert.equal(res.data.secrets.length, 1);
+    assert.ok(!JSON.stringify(res.data).includes("s3cret"));
+  });
+
+  it("rejects a wrong code and stays locked", async () => {
+    assert.equal((await person.call("POST", "/api/account/2fa/verify", { code: "000000" })).status, 400);
+    assert.equal((await reveal()).status, 403);
+  });
+
+  it("unlocks reveal and export with a valid code (a recovery code works too)", async () => {
+    assert.equal((await person.call("POST", "/api/account/2fa/verify", { code: recoveryCodes[3] })).status, 200);
+    assert.equal((await reveal()).data.value, "s3cret");
+    const exported = await exportEnv();
+    assert.equal(exported.status, 200);
+    assert.match(exported.data.content, /TOKEN=s3cret/);
+  });
+
+  it("asks again after the window has passed", async () => {
+    await world.db.collection("sessions").updateMany({ userId: person.objectId }, { $set: { stepUpUntil: new Date(Date.now() - 1000) } });
+    assert.equal((await reveal()).status, 403);
+  });
+
+  it("lets a fresh 2FA sign-in reveal straight away", async () => {
+    const { call } = await startLogin();
+    assert.equal((await call("POST", "/api/auth/2fa", { code: recoveryCodes[4] })).status, 200);
+    assert.equal((await call("POST", `/api/vault/secrets/${secret.id}/reveal`)).data.value, "s3cret");
+  });
+
+  it("switches off only with the password and a valid code", async () => {
+    assert.equal((await lock({ enabled: false })).status, 400);
+    assert.equal((await lock({ enabled: false, password: "wrong", code: recoveryCodes[5] })).status, 400);
+    assert.equal((await lock({ enabled: false, password: PASSWORD, code: "000000" })).status, 400);
+    assert.equal((await userDoc()).secretsNeedCode, true, "still on after the failed attempts");
+
+    assert.equal((await lock({ enabled: false, password: PASSWORD, code: recoveryCodes[5] })).status, 200);
+    assert.equal((await userDoc()).secretsNeedCode, undefined);
+    await expire();
+    assert.equal((await reveal()).status, 200, "no code asked once it's off");
+  });
+
+  it("is left on for the next section, which turns 2FA off and checks it goes too", async () => {
+    assert.equal((await lock({ enabled: true })).status, 200);
+    // left on here on purpose: the "changing it" section below turns 2FA off and checks the flag goes with it
+    assert.equal((await userDoc()).secretsNeedCode, true);
+  });
+});
+
 describe("changing it", () => {
   before(clearLimits); // the sections above already used most of the 10 tries per 15 minutes
   it("makes new recovery codes only with the password and a code, and the old ones stop working", async () => {
@@ -135,6 +230,7 @@ describe("changing it", () => {
 
     assert.equal((await person.call("POST", "/api/account/2fa/disable", { password: PASSWORD, code: recoveryCodes[0] })).status, 200);
     assert.equal((await userDoc()).twoFactor, undefined);
+    assert.equal((await userDoc()).secretsNeedCode, undefined, "the secrets lock goes with 2FA");
   });
 
   it("signs in with just the password again afterwards", async () => {

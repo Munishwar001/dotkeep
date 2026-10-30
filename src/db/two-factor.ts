@@ -80,9 +80,19 @@ export async function regenerateRecoveryCodes(userId: ObjectId): Promise<string[
   return codes;
 }
 
+/** Settings -> "Ask for a code before showing secrets". Only possible while 2FA is on. Returns false if it isn't. */
+export async function setSecretsNeedCode(userId: ObjectId, on: boolean): Promise<boolean> {
+  const users = await usersCollection();
+  const { matchedCount } = await users.updateOne(
+    { _id: userId, twoFactor: { $exists: true } },
+    on ? { $set: { secretsNeedCode: true } } : { $unset: { secretsNeedCode: "" } },
+  );
+  return matchedCount > 0;
+}
+
 export async function disableTwoFactor(userId: ObjectId): Promise<void> {
   const users = await usersCollection();
-  await users.updateOne({ _id: userId }, { $unset: { twoFactor: "", twoFactorPending: "" } });
+  await users.updateOne({ _id: userId }, { $unset: { twoFactor: "", twoFactorPending: "", secretsNeedCode: "" } });
   await (await challengesCollection()).deleteMany({ userId });
 }
 

@@ -111,6 +111,14 @@ Settings me **Two-factor authentication** section. Authenticator app (Google Aut
 
 **Band karna / naye recovery codes:** `POST /api/account/2fa/disable` aur `/recovery-codes`, dono me **password + abhi ka code (ya recovery code)** chahiye. Chori hui session se 2FA band nahi hoti. Settings ke 2FA routes ka ek counter: 10 koshish / 15 minute.
 
+**Protect secret values (opt-in):** 2FA chalu hone ke baad Settings me ek alag section hai, "Protect secret values". Chalu karne par Reveal, Copy aur Export se pehle code poochta hai (shared computer par khuli hui session se secrets na dikhen). Default **off** hai.
+
+- Code ek baar sahi dene par **10 minute** tak dobara nahi poochta. Code se login karne ya 2FA chalu karne wali session ko bhi ye chhoot milti hai.
+- Server check karta hai (`requireStepUp` in `src/lib/api-guard.ts`), sirf screen nahi: reveal, version reveal aur export teeno me. Bina code ke `403 step_up_required`.
+- Chalu karna: `POST /api/account/2fa/secrets-lock { enabled: true }`. Band karna: `{ enabled: false, password, code }`, yaani chori hui session se band nahi hoga.
+- Code dene ka route: `POST /api/account/2fa/verify { code }` (10 koshish / 15 minute).
+- 2FA band karne par ye bhi apne aap band ho jata hai.
+
 **Kaise store hota hai:** secret `VAULT_ENCRYPTION_KEY` se encrypt (AES-256-GCM, user ke saath bandha). Recovery codes sirf SHA-256 hash me. Isliye 2FA ko bhi wahi key chahiye jo vault ko. **Key kho gayi to 2FA wale log login nahi kar paayenge**, backup rakho.
 
 **Files:** `src/lib/totp.ts` (code banana/check karna), `src/db/two-factor.ts`, `src/app/api/auth/2fa/`, `src/app/api/account/2fa/`, `src/modules/settings/two-factor-form.tsx`, `src/modules/auth/two-factor-step.tsx`.

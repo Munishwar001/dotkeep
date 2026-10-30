@@ -1,12 +1,15 @@
 import { logError } from "./logger";
 import { ObjectId } from "mongodb";
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { Access, Actor } from "@/db/access";
 import { LimitError, NameTakenError, NotFoundError } from "@/db/errors";
+import { hasRecentStepUp } from "@/db/sessions";
 import type { PublicUser } from "@/db/users";
 import { isMongoConfigured } from "./mongodb";
 import { isSameOriginJson } from "./request-guard";
 import { getCurrentUser } from "./session";
+import { SESSION_COOKIE } from "./session-cookie";
 import { isVaultConfigured } from "./vault-crypto";
 
 export const noStore = { "Cache-Control": "no-store" };
@@ -31,6 +34,22 @@ export async function authorize(
   if (!user) return apiError("Please sign in again.", 401);
   const userId = new ObjectId(user.id);
   return { userId, user, actor: { id: userId, name: user.name } };
+}
+
+/**
+ * For routes that send a secret's real value out (reveal, export). If the person turned on "Ask for a code" in Settings, the session must have
+ * passed a code in the last few minutes, otherwise this answers 403 `step_up_required` and the page asks for one.
+ * That protects a browser left open on a shared computer: the session cookie alone isn't enough to read secrets.
+ * Returns an error Response, or null when it's fine.
+ */
+export async function requireStepUp(auth: { user: PublicUser }): Promise<Response | null> {
+  if (!auth.user.secretsNeedCode) return null; // opt-in, and only ever true while 2FA is on
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (token && (await hasRecentStepUp(token))) return null;
+  return NextResponse.json(
+    { error: "Enter a code from your authenticator app to continue.", code: "step_up_required" },
+    { status: 403, headers: noStore },
+  );
 }
 
 /**

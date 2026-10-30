@@ -1,8 +1,11 @@
+import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { markStepUp } from "@/db/sessions";
 import { confirmTwoFactorSetup } from "@/db/two-factor";
 import { findUserById } from "@/db/users";
 import { parseTwoFactorCode } from "@/lib/account-input";
 import { apiError, authorize, handleError, noStore } from "@/lib/api-guard";
+import { SESSION_COOKIE } from "@/lib/session-cookie";
 import { limitTwoFactorChanges } from "@/lib/two-factor-guard";
 
 // POST /api/account/2fa/enable  { code }  ->  { recoveryCodes }
@@ -25,6 +28,9 @@ export async function POST(request: Request) {
 
     const recoveryCodes = await confirmTwoFactorSetup(user, parsed.data.code);
     if (!recoveryCodes) return apiError("That code isn’t right. Check the code in your app and try again.", 400);
+    // The code just proved this session, so it isn't asked again right away.
+    const token = (await cookies()).get(SESSION_COOKIE)?.value;
+    if (token) await markStepUp(token);
     return NextResponse.json({ recoveryCodes }, { headers: noStore });
   } catch (error) {
     return handleError(error);

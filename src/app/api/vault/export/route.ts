@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { projectAccess } from "@/db/access";
 import { parseObjectId } from "@/db/collections";
 import { exportSecrets } from "@/db/secret-import";
-import { apiError, authorize, handleError, noStore } from "@/lib/api-guard";
+import { apiError, authorize, handleError, noStore, requireStepUp } from "@/lib/api-guard";
 import { serializeEnv } from "@/lib/dotenv";
 import { rateLimit } from "@/lib/request-guard";
 import { parseExport } from "@/lib/vault-input";
@@ -13,6 +13,8 @@ import { parseExport } from "@/lib/vault-input";
 export async function POST(request: Request) {
   const auth = await authorize(request, { mutating: true });
   if (auth instanceof Response) return auth;
+  const stepUp = await requireStepUp(auth);
+  if (stepUp) return stepUp;
 
   const limit = await rateLimit(`export:${auth.userId.toString()}`, 10, 60 * 1000);
   if (!limit.ok) {

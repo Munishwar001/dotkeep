@@ -52,7 +52,8 @@ export async function POST(request: Request) {
     }
 
     await deleteChallenge(token);
-    const { token: sessionToken, expiresAt } = await createSession(user._id, deviceLabel(request.headers.get("user-agent")));
+    // verified: the code just entered counts, so the first reveal doesn't ask for another one (a code can't be used twice).
+    const { token: sessionToken, expiresAt } = await createSession(user._id, deviceLabel(request.headers.get("user-agent")), { verified: true });
     await recordLogin(user._id);
     const response = NextResponse.json({ user: toPublicUser(user) });
     response.cookies.set(SESSION_COOKIE, sessionToken, sessionCookieOptions(expiresAt));
