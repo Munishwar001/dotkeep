@@ -89,6 +89,32 @@ src/modules/settings/                   forms, sessions list, delete dialog
 
 ## 8. Abhi nahi hai
 
-Email badalna, email verify karna, password reset (bhoolne par), 2-step login (2FA), aur theme (dark mode).
+Email badalna, aur theme (dark mode). Admin ke paas kisi user ka 2FA band karne ka button bhi nahi hai.
+
+---
+
+## 9. Two-factor authentication (2FA)
+
+Settings me **Two-factor authentication** section. Authenticator app (Google Authenticator, Authy, 1Password...) ke 6-digit code se login ka dusra step.
+
+**Chalu karna** (password dobara poochta hai):
+
+1. `POST /api/account/2fa/setup { password }` secret banata hai, QR aur key wapas deta hai. Secret abhi **pending** hai, kuch active nahi.
+2. App me QR scan karo, uska code daalo: `POST /api/account/2fa/enable { code }`. Sahi code par 2FA chalu, aur **8 recovery codes ek hi baar** dikhte hain.
+
+**Login par:**
+
+- Password sahi (ya Google se aaye) aur 2FA on hai, to **session nahi banta.** Ek 5 minute ka *challenge* banta hai (cookie `dotkeep_2fa`, sirf `/api/auth/2fa` ko jati hai).
+- `POST /api/auth/2fa { code }` sahi code par asli session banata hai. Code ya to app ka 6-digit code, ya ek recovery code (har ek sirf ek baar chalta hai).
+- **5 galat code** ke baad challenge khatam, password dobara daalna padta hai. Upar se 20 koshish / 15 minute har account par, 100 har IP par.
+- Wahi code do baar nahi chalta (`lastStep` aage badhta hai), isliye kisi ne dekh bhi liya to replay nahi kar sakta.
+
+**Band karna / naye recovery codes:** `POST /api/account/2fa/disable` aur `/recovery-codes`, dono me **password + abhi ka code (ya recovery code)** chahiye. Chori hui session se 2FA band nahi hoti. Settings ke 2FA routes ka ek counter: 10 koshish / 15 minute.
+
+**Kaise store hota hai:** secret `VAULT_ENCRYPTION_KEY` se encrypt (AES-256-GCM, user ke saath bandha). Recovery codes sirf SHA-256 hash me. Isliye 2FA ko bhi wahi key chahiye jo vault ko. **Key kho gayi to 2FA wale log login nahi kar paayenge**, backup rakho.
+
+**Files:** `src/lib/totp.ts` (code banana/check karna), `src/db/two-factor.ts`, `src/app/api/auth/2fa/`, `src/app/api/account/2fa/`, `src/modules/settings/two-factor-form.tsx`, `src/modules/auth/two-factor-step.tsx`.
+
+**Abhi nahi:** recovery codes khatam hone par alert, aur "2FA chalu/band hua" email.
 
 **Test:** asli MongoDB aur asli Chrome ke saath: API ke 76 checks aur UI ke 40+ checks, sab pass.

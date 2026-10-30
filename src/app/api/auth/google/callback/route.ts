@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { NextResponse } from "next/server";
 import { createSession, deleteAllSessions } from "@/db/sessions";
+import { createChallenge } from "@/db/two-factor";
 import { createGoogleUser, EmailTakenError, findUserByEmail, findUserByGoogleId, isBlocked, isEmailVerified, linkGoogleAccount, recordLogin, type UserDoc } from "@/db/users";
 import { deviceLabel } from "@/lib/device-label";
 import { googleRedirectUri } from "@/lib/google-redirect";
@@ -9,7 +10,7 @@ import { logError } from "@/lib/logger";
 import { isMongoConfigured } from "@/lib/mongodb";
 import { hashPassword } from "@/lib/password";
 import { clientIp, rateLimit } from "@/lib/request-guard";
-import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
+import { SESSION_COOKIE, sessionCookieOptions, TWO_FACTOR_COOKIE, twoFactorCookieOptions } from "@/lib/session";
 
 /** Redirects to the login page with a reason, and always throws away the one-time OAuth cookie. */
 function fail(request: Request, code: string) {
@@ -67,6 +68,15 @@ export async function GET(request: Request) {
     }
 
     if (isBlocked(user)) return fail(request, "blocked");
+
+    // Google proved who they are, but an account with 2FA still owes a code. The login page shows the code step.
+    if (user.twoFactor) {
+      const challenge = await createChallenge(user._id);
+      const response = NextResponse.redirect(new URL("/login?twofactor=1", request.url));
+      response.cookies.set(TWO_FACTOR_COOKIE, challenge.token, twoFactorCookieOptions(challenge.expiresAt));
+      response.cookies.set(OAUTH_COOKIE, "", { path: OAUTH_COOKIE_PATH, maxAge: 0 });
+      return response;
+    }
 
     const { token, expiresAt } = await createSession(user._id, deviceLabel(request.headers.get("user-agent")));
     await recordLogin(user._id);

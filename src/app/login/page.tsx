@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { isGoogleConfigured } from "@/lib/google-oauth";
-import { AuthForm } from "@/modules/auth/auth-form";
 import { AuthShell } from "@/modules/auth/auth-shell";
 import { GoogleButton } from "@/modules/auth/google-button";
-import { RegisteredNotice } from "@/modules/auth/registered-notice";
+import { LoginFlow } from "@/modules/auth/login-flow";
 
 export const metadata: Metadata = {
   title: "Sign in — Dotkeep",
@@ -14,12 +13,10 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <AuthShell mode="login">
-      {/* Reads the URL (?registered=1), so it needs a Suspense boundary; the rest of the page stays static. */}
+      {/* Reads the URL (?registered=1, ?twofactor=1), so it needs a Suspense boundary; the rest of the page stays static. */}
       <Suspense fallback={null}>
-        <RegisteredNotice />
+        <LoginFlow google={isGoogleConfigured() ? <GoogleButton /> : null} />
       </Suspense>
-      {isGoogleConfigured() && <GoogleButton />}
-      <AuthForm mode="login" />
     </AuthShell>
   );
 }

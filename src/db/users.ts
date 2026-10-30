@@ -35,6 +35,15 @@ export type UserDoc = {
   maskEmails?: boolean;
   // Google's stable id for this person (the `sub` claim), set once they sign in with Google. Missing = never used Google.
   googleId?: string;
+  // Two-step sign-in (Settings -> Two-factor authentication). Missing = off. See src/db/two-factor.ts.
+  twoFactor?: {
+    secret: string; // the authenticator secret, encrypted (vault-crypto), never plain
+    enabledAt: Date;
+    lastStep?: number; // the last 30-second step a code was accepted for, so one code can't be used twice
+    recoveryHashes: string[]; // sha256 of each unused recovery code
+  };
+  // A secret that was shown for setup but not confirmed with a code yet. Replaced each time setup starts again.
+  twoFactorPending?: { secret: string; createdAt: Date };
 };
 
 export type Role = "user" | "admin";
@@ -43,7 +52,7 @@ export type Role = "user" | "admin";
 export type NewUser = { name: string; email: string; passwordHash: string };
 
 /** A user that is safe to send to the browser: no password hash. */
-export type PublicUser = { id: string; name: string; email: string; role: Role; revealSeconds: number; emailVerified: boolean; maskEmails: boolean; createdAt: Date };
+export type PublicUser = { id: string; name: string; email: string; role: Role; revealSeconds: number; emailVerified: boolean; maskEmails: boolean; twoFactorEnabled: boolean; createdAt: Date };
 
 /** Thrown by createUser() when the email is already registered. */
 export class EmailTakenError extends Error {
@@ -69,7 +78,7 @@ export function isEmailVerified(user: Pick<UserDoc, "emailVerified">): boolean {
 
 /** Strips the password hash. Always use this before returning a user to the browser. */
 export function toPublicUser(user: UserDoc): PublicUser {
-  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", revealSeconds: user.revealSeconds ?? REVEAL_SECONDS, emailVerified: isEmailVerified(user), maskEmails: user.maskEmails === true, createdAt: user.createdAt };
+  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", revealSeconds: user.revealSeconds ?? REVEAL_SECONDS, emailVerified: isEmailVerified(user), maskEmails: user.maskEmails === true, twoFactorEnabled: user.twoFactor !== undefined, createdAt: user.createdAt };
 }
 
 // The unique index on `email` is what really stops two accounts with the same email, even if two

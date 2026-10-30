@@ -40,3 +40,19 @@ export function parsePasswordOnly(body: unknown): Result<{ password: string }> {
   if (!password) return fail("Enter your password to confirm.");
   return { ok: true, data: { password } };
 }
+
+/** A 6-digit code from the authenticator app, or a recovery code. Only the length is checked here; the code itself is verified later. */
+export function parseTwoFactorCode(body: unknown): Result<{ code: string }> {
+  const code = text(asObject(body).code).trim();
+  if (!code) return fail("Enter the code from your authenticator app.");
+  if (code.length > 32) return fail("That code isn’t right.");
+  return { ok: true, data: { code } };
+}
+
+export function parsePasswordAndCode(body: unknown): Result<{ password: string; code: string }> {
+  const password = parsePasswordOnly(body);
+  if (!password.ok) return password;
+  const code = parseTwoFactorCode(body);
+  if (!code.ok) return code;
+  return { ok: true, data: { password: password.data.password, code: code.data.code } };
+}

@@ -76,6 +76,6 @@ src/lib/mail-html.ts                      emails ka HTML (escaped)
 
 ## 6. Abhi nahi hai
 
-2-step login (2FA), aur "password badla gaya" alert me device ya jagah ki jaankari (hum IP save nahi karte).
+"Password badla gaya" alert me device ya jagah ki jaankari (hum IP save nahi karte).
 
 **Test:** asli MongoDB, nodemailer aur nakli SMTP server ke saath: API ke 65 checks aur Chrome me poora flow, sab pass. Asli email service ke saath ek baar khud try karna.

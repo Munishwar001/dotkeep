@@ -593,6 +593,9 @@ a.dash-tile { display: block; }
 .st-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-top: 4px; }
 .st-hint { margin: 0; color: #8a91a3; font-size: 12px; }
 .st-select { min-width: 160px; }
+.st-qr { display: block; width: 140px; height: 140px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.st-key { font: 12px var(--font-geist-mono), monospace; color: var(--ink); overflow-wrap: anywhere; user-select: all; }
+.st-codes { list-style: none; margin: 0; padding: 10px 14px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; border: 1px solid var(--line); border-radius: 8px; background: #f7f8fb; font: 12px/1.5 var(--font-geist-mono), monospace; color: var(--ink); user-select: all; }
 .st-note { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 12.5px; }
 .st-note svg { width: 15px; height: 15px; flex: none; }
 .st-note.is-ok { color: #1d6b49; }
