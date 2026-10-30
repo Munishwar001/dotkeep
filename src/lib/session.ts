@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { cache } from "react";
 import { findUserBySessionToken } from "@/db/sessions";
 import { toPublicUser, type PublicUser } from "@/db/users";
@@ -27,6 +28,9 @@ export const getCurrentUser = cache(async (): Promise<PublicUser | null> => {
   if (!isMongoConfigured) return null;
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
+  // Prefetches render with the cookies but must not touch the database: Next prerenders them, which rejects `new Date()`
+  // inside the MongoDB driver and tears the connection down ("Topology is closed"). This waits for a real request.
+  await connection();
   const user = await findUserBySessionToken(token);
   return user ? toPublicUser(user) : null;
 });
