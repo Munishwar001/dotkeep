@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { sendTwoFactorChangedEmail } from "@/lib/two-factor-email";
 import { NextResponse } from "next/server";
 import { markStepUp } from "@/db/sessions";
 import { confirmTwoFactorSetup } from "@/db/two-factor";
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
     // The code just proved this session, so it isn't asked again right away.
     const token = (await cookies()).get(SESSION_COOKIE)?.value;
     if (token) await markStepUp(token);
+    await sendTwoFactorChangedEmail(user, "enabled");
     return NextResponse.json({ recoveryCodes }, { headers: noStore });
   } catch (error) {
     return handleError(error);

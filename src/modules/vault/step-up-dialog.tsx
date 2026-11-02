@@ -68,13 +68,13 @@ function StepUpForm({ onDone }: { onDone: (ok: boolean) => void }) {
       <DialogHeader>
         <DialogTitle>Confirm it’s you</DialogTitle>
         <DialogDescription>
-          Enter the 6-digit code from your authenticator app to view or export secrets. You won’t be asked again for a few minutes.
+          Enter the 6-digit code from your authenticator app, or a recovery code, to view or export secrets. You won’t be asked again for a few minutes.
         </DialogDescription>
       </DialogHeader>
 
       <FieldGroup className="my-5">
         <Field>
-          <FieldLabel htmlFor="step-up-code">Authentication code</FieldLabel>
+          <FieldLabel htmlFor="step-up-code">Authentication or recovery code</FieldLabel>
           <Input id="step-up-code" className="h-10" autoFocus autoComplete="one-time-code" placeholder="123456" value={code} onChange={(e) => { setCode(e.target.value); setError(null); }} />
         </Field>
         {error && <div className="auth-alert" role="alert"><CircleAlert aria-hidden="true" /><p>{error}</p></div>}

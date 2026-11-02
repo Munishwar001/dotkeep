@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { markStepUp, STEP_UP_MINUTES } from "@/db/sessions";
 import { verifySecondFactor } from "@/db/two-factor";
 import { findUserById } from "@/db/users";
+import { warnIfLowOnRecoveryCodes } from "@/lib/two-factor-guard";
 import { parseTwoFactorCode } from "@/lib/account-input";
 import { apiError, authorize, handleError, noStore } from "@/lib/api-guard";
 import { rateLimit } from "@/lib/request-guard";
@@ -32,8 +33,9 @@ export async function POST(request: Request) {
     if (!user.twoFactor) return apiError("Two-factor authentication isn’t turned on.", 409);
     if (!(await verifySecondFactor(user, parsed.data.code))) {
       // A code works once, so one just used to sign in is refused here too. Say so, or it looks like a typo.
-      return apiError("That code isn’t right, or it was just used. Wait for your app to show the next code and try again.", 400);
+      return apiError("That code isn’t right, or it was just used. Wait for your app to show the next code, or use a recovery code.", 400);
     }
+    await warnIfLowOnRecoveryCodes(user, parsed.data.code);
     const token = (await cookies()).get(SESSION_COOKIE)?.value;
     if (token) await markStepUp(token);
     return NextResponse.json({ ok: true, minutes: STEP_UP_MINUTES }, { headers: noStore });
