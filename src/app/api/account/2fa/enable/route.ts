@@ -31,7 +31,11 @@ export async function POST(request: Request) {
     if (!recoveryCodes) return apiError("That code isn’t right. Check the code in your app and try again.", 400);
     // The code just proved this session, so it isn't asked again right away.
     const token = (await cookies()).get(SESSION_COOKIE)?.value;
-    if (token) await markStepUp(token);
+    if (token) {
+      try {
+        await markStepUp(token);
+      } catch {}
+    }
     await sendTwoFactorChangedEmail(user, "enabled");
     return NextResponse.json({ recoveryCodes }, { headers: noStore });
   } catch (error) {
