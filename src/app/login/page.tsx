@@ -4,6 +4,7 @@ import { isGoogleConfigured } from "@/lib/google-oauth";
 import { AuthShell } from "@/modules/auth/auth-shell";
 import { GoogleButton } from "@/modules/auth/google-button";
 import { LoginFlow } from "@/modules/auth/login-flow";
+import { RedirectIfSignedIn } from "@/modules/auth/redirect-if-signed-in";
 
 export const metadata: Metadata = {
   title: "Sign in — Dotkeep",
@@ -13,6 +14,9 @@ export const metadata: Metadata = {
 export default function LoginPage() {
   return (
     <AuthShell mode="login">
+      <Suspense fallback={null}>
+        <RedirectIfSignedIn />
+      </Suspense>
       {/* Reads the URL (?registered=1, ?twofactor=1), so it needs a Suspense boundary; the rest of the page stays static. */}
       <Suspense fallback={null}>
         <LoginFlow google={isGoogleConfigured() ? <GoogleButton /> : null} />
