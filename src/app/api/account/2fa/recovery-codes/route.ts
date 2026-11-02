@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { regenerateRecoveryCodes } from "@/db/two-factor";
 import { parsePasswordAndCode } from "@/lib/account-input";
 import { apiError, authorize, handleError, noStore } from "@/lib/api-guard";
+import { sendTwoFactorChangedEmail } from "@/lib/two-factor-email";
 import { limitTwoFactorChanges, requirePasswordAndCode } from "@/lib/two-factor-guard";
 
 // POST /api/account/2fa/recovery-codes  { password, code }  ->  { recoveryCodes }
@@ -19,7 +20,9 @@ export async function POST(request: Request) {
   try {
     const user = await requirePasswordAndCode(auth.userId, parsed.data.password, parsed.data.code);
     if (user instanceof Response) return user;
-    return NextResponse.json({ recoveryCodes: await regenerateRecoveryCodes(auth.userId) }, { headers: noStore });
+    const recoveryCodes = await regenerateRecoveryCodes(auth.userId);
+    await sendTwoFactorChangedEmail(user, "recovery-codes");
+    return NextResponse.json({ recoveryCodes }, { headers: noStore });
   } catch (error) {
     return handleError(error);
   }

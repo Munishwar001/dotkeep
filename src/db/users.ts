@@ -44,6 +44,8 @@ export type UserDoc = {
   };
   // A secret that was shown for setup but not confirmed with a code yet. Replaced each time setup starts again.
   twoFactorPending?: { secret: string; createdAt: Date };
+  // Opt-in (Settings): ask for a 2FA code before secret values are revealed or exported. Only meaningful while twoFactor is on.
+  secretsNeedCode?: boolean;
 };
 
 export type Role = "user" | "admin";
@@ -52,7 +54,7 @@ export type Role = "user" | "admin";
 export type NewUser = { name: string; email: string; passwordHash: string };
 
 /** A user that is safe to send to the browser: no password hash. */
-export type PublicUser = { id: string; name: string; email: string; role: Role; revealSeconds: number; emailVerified: boolean; maskEmails: boolean; twoFactorEnabled: boolean; createdAt: Date };
+export type PublicUser = { id: string; name: string; email: string; role: Role; revealSeconds: number; emailVerified: boolean; maskEmails: boolean; twoFactorEnabled: boolean; secretsNeedCode: boolean; createdAt: Date };
 
 /** Thrown by createUser() when the email is already registered. */
 export class EmailTakenError extends Error {
@@ -78,7 +80,7 @@ export function isEmailVerified(user: Pick<UserDoc, "emailVerified">): boolean {
 
 /** Strips the password hash. Always use this before returning a user to the browser. */
 export function toPublicUser(user: UserDoc): PublicUser {
-  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", revealSeconds: user.revealSeconds ?? REVEAL_SECONDS, emailVerified: isEmailVerified(user), maskEmails: user.maskEmails === true, twoFactorEnabled: user.twoFactor !== undefined, createdAt: user.createdAt };
+  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", revealSeconds: user.revealSeconds ?? REVEAL_SECONDS, emailVerified: isEmailVerified(user), maskEmails: user.maskEmails === true, twoFactorEnabled: user.twoFactor !== undefined, secretsNeedCode: user.twoFactor !== undefined && user.secretsNeedCode === true, createdAt: user.createdAt };
 }
 
 // The unique index on `email` is what really stops two accounts with the same email, even if two

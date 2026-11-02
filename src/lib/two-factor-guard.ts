@@ -5,6 +5,8 @@ import { verifySecondFactor } from "@/db/two-factor";
 import { findUserById, type UserDoc } from "@/db/users";
 import { apiError, noStore } from "./api-guard";
 import { verifyPassword } from "./password";
+import { looksLikeRecoveryCode } from "./totp";
+import { LOW_RECOVERY_CODES, sendLowRecoveryCodesEmail } from "./two-factor-email";
 import { rateLimit } from "./request-guard";
 
 /** Same counter for every route below, so switching routes doesn't give extra guesses. 10 tries per 15 minutes. */
@@ -33,4 +35,11 @@ export async function requirePasswordAndCode(userId: ObjectId, password: string,
   if (!user.twoFactor) return apiError("Two-factor authentication isn’t turned on.", 409);
   if (!(await verifySecondFactor(user, code))) return apiError("That code isn’t right.", 400);
   return user;
+}
+
+/** Call after a code was accepted. If it was a recovery code and only a few are left, emails the owner. `user` is the document from BEFORE the code was used. */
+export async function warnIfLowOnRecoveryCodes(user: UserDoc, code: string): Promise<void> {
+  if (!looksLikeRecoveryCode(code)) return;
+  const left = (user.twoFactor?.recoveryHashes.length ?? 0) - 1;
+  if (left <= LOW_RECOVERY_CODES) await sendLowRecoveryCodesEmail(user, Math.max(left, 0));
 }

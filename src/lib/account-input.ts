@@ -56,3 +56,10 @@ export function parsePasswordAndCode(body: unknown): Result<{ password: string; 
   if (!code.ok) return code;
   return { ok: true, data: { password: password.data.password, code: code.data.code } };
 }
+
+/** Turning the secrets lock on needs nothing more; turning it off also needs the password and a code (checked by the route). */
+export function parseSecretsLock(body: unknown): Result<{ enabled: boolean }> {
+  const enabled = asObject(body).enabled;
+  if (typeof enabled !== "boolean") return fail("Choose on or off.");
+  return { ok: true, data: { enabled } };
+}

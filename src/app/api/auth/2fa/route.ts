@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createSession } from "@/db/sessions";
 import { deleteChallenge, takeChallengeAttempt, verifySecondFactor } from "@/db/two-factor";
 import { findUserById, isBlocked, recordLogin, toPublicUser } from "@/db/users";
+import { warnIfLowOnRecoveryCodes } from "@/lib/two-factor-guard";
 import { parseTwoFactorCode } from "@/lib/account-input";
 import { deviceLabel } from "@/lib/device-label";
 import { logError } from "@/lib/logger";
@@ -51,8 +52,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "That code isn’t right. Check the code in your app and try again." }, { status: 401 });
     }
 
+    await warnIfLowOnRecoveryCodes(user, parsed.data.code);
     await deleteChallenge(token);
-    const { token: sessionToken, expiresAt } = await createSession(user._id, deviceLabel(request.headers.get("user-agent")));
+    // verified: the code just entered counts, so the first reveal doesn't ask for another one (a code can't be used twice).
+    const { token: sessionToken, expiresAt } = await createSession(user._id, deviceLabel(request.headers.get("user-agent")), { verified: true });
     await recordLogin(user._id);
     const response = NextResponse.json({ user: toPublicUser(user) });
     response.cookies.set(SESSION_COOKIE, sessionToken, sessionCookieOptions(expiresAt));
