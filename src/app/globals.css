@@ -392,6 +392,7 @@ a.dash-tile { display: block; }
 .vt-name { min-width: 0; }
 .vt-name b { display: block; font-size: 13px; font-weight: 580; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vt-name small { display: block; margin-top: 3px; color: #8a91a3; font-size: 11.5px; }
+.vt-name small.vt-notes { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vt-project { min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vt-project a { color: #3d465c; }
 .vt-project a:hover { color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }

@@ -31,6 +31,7 @@ User ──► Project ("Launchpad") ──► Secret ("DATABASE_URL", Productio
 | `name` | Jaise `DATABASE_URL` (≤ 80) |
 | `environment` | `local`, `staging` ya `production` |
 | `type` | API key, Access token, Webhook URL, Database URL, Environment variable, Other |
+| `description` | Optional notes (≤ 500). **Encrypted nahi hoti**, isliye value yahan na likhein. Purane secrets me ye field nahi hota (empty maana jata hai). |
 | `valueEncrypted` | **Encrypted value.** Asli value kahin save nahi hoti. |
 
 Rule: ek project me **same naam + same environment** do baar nahi ho sakta. Same naam alag environment me ho sakta hai.
@@ -61,7 +62,7 @@ Database me value aisi dikhti hai: `v1$<iv>$<tag>$<data>`.
 
 ### Secret banana
 ```
-New secret dialog ── POST /api/vault/secrets { projectId, name, environment, type, value }
+New secret dialog ── POST /api/vault/secrets { projectId, name, environment, type, value, description? }
    1. authorize()       login hai? same-origin hai? vault configured hai?
    2. parseSecretCreate() server par dobara validation
    3. project tumhara hai? (nahi → 404)      limit 1000 secrets
@@ -229,3 +230,19 @@ Sab test asli MongoDB aur asli Chrome ke saath hue hain: API ke 47 checks (encry
 **Environments view:** project page par List / Environments toggle. Environments me ek row = ek secret naam, teen columns = Local, Staging, Production. Jo environment me secret nahi hai wahan **Add** button (naam aur environment pehle se bhara hua) aur row par "Missing in ..." likha aata hai.
 
 Naye API: `GET/POST /api/vault/projects/:id/members`, `PATCH/DELETE /api/vault/projects/:id/members/:userId`.
+
+---
+
+## JSON import/export aur whole-vault backup
+
+**Ek environment (JSON):** Import / export dialog me **Format** select hai: `.env` ya `JSON`. JSON ka shape flat object hai, `{ "NAME": "value" }`. Number aur true/false text ban jate hain, baaki cheezein report hoti hain aur skip. `POST /api/vault/import` aur `/export` me `format: "env" | "json"` bhejte hain (na bhejo to `.env`). JSON export me wo naam bhi aate hain jo `.env` me nahi ja sakte (jaise spaces wale).
+
+**Poora vault (backup):** menu me **Back up whole vault** aur **Restore backup** (sirf all-projects page par). File ka shape:
+```
+{ "app": "dotkeep", "version": 1, "exportedAt": "...",
+  "projects": [ { "name", "description", "secrets": [ { "name", "environment", "type", "description", "value" } ] } ] }
+```
+- `POST /api/vault/backup/export`: tumhare **apne** projects ki saari values decrypt hoti hain. `.env` export jaise hi rules: same-origin POST, 2FA step-up, rate limit (10/minute, `/export` ke saath shared), aur har secret ka activity log me "exported". **Shared projects shamil nahi** (wo kisi aur ke hain).
+- `POST /api/vault/backup/import { content, overwrite? }`: project **naam se** match hota hai, na mile to ban jata hai. Same project + name + environment wala secret skip hota hai, ya `overwrite` par value badal jati hai (purani History me). Type aur notes bhi wapas aate hain. File ka jo hissa padha nahi ja sakta (galat environment/type, khali value) `issues` me aata hai.
+- **File me real values hain aur wo encrypted nahi hai**, isliye safe rakho, commit mat karo.
+- Code: `src/lib/vault-json.ts` (format), `src/db/vault-backup.ts` (backup/restore), `src/db/secret-import.ts` (`importEntries`, dono import ka common core).

@@ -24,12 +24,20 @@ export const LIMITS = {
   projectName: 60,
   projectDescription: 280,
   secretName: 80,
+  secretDescription: 500,
   secretValue: 10_000,
   versions: 20, // old values kept per secret
   bulk: 200, // secrets in one bulk edit or delete
   importEntries: 500, // variables in one .env import
-  importBytes: 200_000, // size of one .env import
+  importBytes: 200_000, // size of one .env or JSON variables import
+  backupBytes: 12_000_000, // size of a whole-vault backup file (LIMITS.secrets values at their largest)
 } as const;
+
+export const TRANSFER_FORMATS = [
+  { value: "env", label: ".env", extension: ".env" },
+  { value: "json", label: "JSON", extension: ".json" },
+] as const;
+export type TransferFormat = (typeof TRANSFER_FORMATS)[number]["value"];
 
 export const ROLE_LABELS = { owner: "Owner", editor: "Editor", viewer: "Viewer" } as const;
 
@@ -41,8 +49,8 @@ export const AUDIT_LABELS = {
   value_changed: "Value changed",
   moved: "Moved",
   restored: "Restored old value",
-  imported: "Imported from .env",
-  exported: "Exported to .env",
+  imported: "Imported",
+  exported: "Exported",
   deleted: "Deleted",
 } as const;
 

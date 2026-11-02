@@ -9,7 +9,7 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "./client-api";
-import { ENVIRONMENTS, LIMITS, type Environment } from "./constants";
+import { ENVIRONMENTS, LIMITS, TRANSFER_FORMATS, type Environment, type TransferFormat } from "./constants";
 import { canWriteTo, type ProjectOption } from "./secret-dialog";
 
 export type TransferMode = "import" | "export";
@@ -28,7 +28,7 @@ type ImportSummary = {
   unchanged: number;
   skipped: number;
   failed: { name: string; error: string }[];
-  lineErrors: { line: number; message: string }[];
+  lineErrors: { line?: number; message: string }[];
 };
 
 export function EnvTransferDialog({ mode, onOpenChange, ...rest }: EnvTransferDialogProps) {
@@ -48,6 +48,7 @@ function TransferForm({ mode, projects: allProjects, defaultProjectId, defaultEn
   const projects = importing ? allProjects.filter(canWriteTo) : allProjects; // a viewer can export but not import
   const [projectId, setProjectId] = useState(projects.some((project) => project.id === defaultProjectId) ? defaultProjectId! : (projects[0]?.id ?? ""));
   const [environment, setEnvironment] = useState<Environment>(defaultEnvironment ?? "local");
+  const [format, setFormat] = useState<TransferFormat>("env");
   const [content, setContent] = useState("");
   const [overwrite, setOverwrite] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,14 +69,14 @@ function TransferForm({ mode, projects: allProjects, defaultProjectId, defaultEn
     event.preventDefault();
     if (pending) return;
     if (!projectId) return setError("Choose a project.");
-    if (importing && !content.trim()) return setError("Paste or choose a .env file first.");
+    if (importing && !content.trim()) return setError(`Paste or choose a ${formatLabel} file first.`);
 
     setPending(true);
     setError(null);
     setNotice(null);
 
     if (importing) {
-      const result = await api<ImportSummary>("POST", "/api/vault/import", { projectId, environment, content, overwrite });
+      const result = await api<ImportSummary>("POST", "/api/vault/import", { projectId, environment, format, content, overwrite });
       setPending(false);
       if (!result.ok) return setError(result.error);
       setSummary(result.data);
@@ -83,15 +84,17 @@ function TransferForm({ mode, projects: allProjects, defaultProjectId, defaultEn
       return;
     }
 
-    const result = await api<{ content: string; count: number; skipped: string[]; projectName: string }>("POST", "/api/vault/export", { projectId, environment });
+    const result = await api<{ content: string; count: number; skipped: string[]; projectName: string }>("POST", "/api/vault/export", { projectId, environment, format });
     setPending(false);
     if (!result.ok) return setError(result.error);
-    if (result.data.count === 0) return setError("There are no secrets with valid variable names in that project and environment.");
-    download(result.data.content, `.env.${environment}`);
+    if (result.data.count === 0) return setError(format === "json" ? "There are no secrets in that project and environment." : "There are no secrets with valid variable names in that project and environment.");
+    download(result.data.content, format === "json" ? `${result.data.projectName}.${environment}.json` : `.env.${environment}`, format === "json" ? "application/json" : "text/plain");
     const skipped = result.data.skipped.length ? ` Left out because they aren’t valid variable names: ${result.data.skipped.join(", ")}.` : "";
     setNotice(`Downloaded ${result.data.count} ${result.data.count === 1 ? "variable" : "variables"}. The file holds real values, so keep it safe and don’t commit it.${skipped}`);
     router.refresh(); // the export is now in the activity log
   }
+
+  const formatLabel = TRANSFER_FORMATS.find((item) => item.value === format)!.label;
 
   if (summary) {
     const parts = [
@@ -108,8 +111,8 @@ function TransferForm({ mode, projects: allProjects, defaultProjectId, defaultEn
         </DialogHeader>
         {(summary.failed.length > 0 || summary.lineErrors.length > 0) && (
           <ul className="vt-import-issues">
-            {summary.failed.map((item) => <li key={item.name}><b>{item.name}</b>: {item.error}</li>)}
-            {summary.lineErrors.map((item) => <li key={item.line}>Line {item.line}: {item.message}</li>)}
+            {summary.failed.map((item, index) => <li key={index}><b>{item.name}</b>: {item.error}</li>)}
+            {summary.lineErrors.map((item, index) => <li key={index}>{item.line ? `Line ${item.line}: ` : ""}{item.message}</li>)}
           </ul>
         )}
         <DialogFooter><Button type="button" onClick={onDone}>Done</Button></DialogFooter>
@@ -120,11 +123,13 @@ function TransferForm({ mode, projects: allProjects, defaultProjectId, defaultEn
   return (
     <form onSubmit={onSubmit} noValidate aria-busy={pending}>
       <DialogHeader>
-        <DialogTitle>{importing ? "Import a .env file" : "Export to a .env file"}</DialogTitle>
+        <DialogTitle>{importing ? `Import a ${formatLabel} file` : `Export to a ${formatLabel} file`}</DialogTitle>
         <DialogDescription>
           {importing
-            ? "Every NAME=value line becomes an encrypted secret in the project and environment you choose."
-            : "Downloads every secret of one project and environment as a .env file. Each one is written to the activity log."}
+            ? format === "json"
+              ? "Every \"NAME\": \"value\" pair becomes an encrypted secret in the project and environment you choose."
+              : "Every NAME=value line becomes an encrypted secret in the project and environment you choose."
+            : `Downloads every secret of one project and environment as a ${formatLabel} file. Each one is written to the activity log.`}
         </DialogDescription>
       </DialogHeader>
 
@@ -144,28 +149,35 @@ function TransferForm({ mode, projects: allProjects, defaultProjectId, defaultEn
           </Field>
         </div>
 
+        <Field>
+          <FieldLabel htmlFor="transfer-format">Format</FieldLabel>
+          <NativeSelect id="transfer-format" className="w-full" value={format} onChange={(e) => setFormat(e.target.value as TransferFormat)}>
+            {TRANSFER_FORMATS.map((item) => <NativeSelectOption key={item.value} value={item.value}>{item.label}</NativeSelectOption>)}
+          </NativeSelect>
+        </Field>
+
         {importing && (
           <>
             <Field>
               <div className="auth-label-row">
-                <FieldLabel htmlFor="transfer-content">.env contents</FieldLabel>
+                <FieldLabel htmlFor="transfer-content">{formatLabel} contents</FieldLabel>
                 <label className="auth-link vt-file-button">
                   <FileUp aria-hidden="true" className="vt-inline-icon" /> Choose a file
-                  <input type="file" accept=".env,.txt,text/plain,application/octet-stream" className="sr-only" onChange={onFile} />
+                  <input type="file" accept=".env,.json,.txt,text/plain,application/json,application/octet-stream" className="sr-only" onChange={onFile} />
                 </label>
               </div>
               <Textarea
                 id="transfer-content"
                 rows={7}
                 className="vt-value-input"
-                placeholder={"DATABASE_URL=postgres://...\nAPI_KEY=abc123"}
+                placeholder={format === "json" ? '{\n  "DATABASE_URL": "postgres://...",\n  "API_KEY": "abc123"\n}' : "DATABASE_URL=postgres://...\nAPI_KEY=abc123"}
                 autoComplete="off"
                 autoCapitalize="off"
                 spellCheck={false}
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
               />
-              <FieldDescription>Up to {LIMITS.importEntries} variables. Comments (#) and blank lines are ignored.</FieldDescription>
+              <FieldDescription>Up to {LIMITS.importEntries} variables. {format === "json" ? "A flat object of names and values. For a whole-vault backup use Restore backup." : "Comments (#) and blank lines are ignored."}</FieldDescription>
             </Field>
             <label className="vt-check">
               <input type="checkbox" checked={overwrite} onChange={(e) => setOverwrite(e.target.checked)} />
@@ -180,14 +192,14 @@ function TransferForm({ mode, projects: allProjects, defaultProjectId, defaultEn
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone} disabled={pending}>{notice ? "Close" : "Cancel"}</Button>
-        <Button type="submit" disabled={pending}>{pending ? (importing ? "Importing…" : "Exporting…") : importing ? "Import" : "Download .env"}</Button>
+        <Button type="submit" disabled={pending}>{pending ? (importing ? "Importing…" : "Exporting…") : importing ? "Import" : `Download ${formatLabel}`}</Button>
       </DialogFooter>
     </form>
   );
 }
 
-function download(content: string, filename: string) {
-  const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
+export function download(content: string, filename: string, type = "text/plain") {
+  const url = URL.createObjectURL(new Blob([content], { type: `${type};charset=utf-8` }));
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;

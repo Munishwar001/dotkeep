@@ -1,5 +1,5 @@
 /** Server-side checks for project and secret data. The forms check too, but the server never trusts the browser. */
-import { ENVIRONMENTS, LIMITS, SECRET_TYPES, type Environment, type SecretType } from "@/modules/vault/constants";
+import { ENVIRONMENTS, LIMITS, SECRET_TYPES, TRANSFER_FORMATS, type Environment, type SecretType, type TransferFormat } from "@/modules/vault/constants";
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
@@ -14,14 +14,22 @@ function checkName(label: string, value: unknown, max: number): { ok: true; name
   return { ok: true, name };
 }
 
-const environmentOf = (value: unknown) => ENVIRONMENTS.find((e) => e.value === value)?.value as Environment | undefined;
-const typeOf = (value: unknown) => SECRET_TYPES.find((t) => t.value === value)?.value as SecretType | undefined;
+export const environmentOf = (value: unknown) => ENVIRONMENTS.find((e) => e.value === value)?.value as Environment | undefined;
+export const typeOf = (value: unknown) => SECRET_TYPES.find((t) => t.value === value)?.value as SecretType | undefined;
+/** A missing format means .env, so clients from before JSON existed keep working. */
+const formatOf = (value: unknown) => (value === undefined ? "env" : (TRANSFER_FORMATS.find((f) => f.value === value)?.value as TransferFormat | undefined));
 
 function checkValue(value: unknown): { ok: true; value: string } | { ok: false; error: string } {
   const text = asString(value);
   if (text === undefined || !text.trim()) return fail("Enter the secret value.");
   if (text.length > LIMITS.secretValue) return fail(`The value must be at most ${LIMITS.secretValue.toLocaleString("en")} characters.`);
   return { ok: true, value: text }; // not trimmed: a secret may legitimately contain spaces or newlines
+}
+
+function checkSecretDescription(value: unknown): { ok: true; description: string } | { ok: false; error: string } {
+  const description = (asString(value) ?? "").trim();
+  if (description.length > LIMITS.secretDescription) return fail(`The notes must be at most ${LIMITS.secretDescription} characters.`);
+  return { ok: true, description };
 }
 
 export function parseProject(body: unknown): Result<{ name: string; description: string }> {
@@ -40,6 +48,7 @@ export function parseSecretCreate(body: unknown): Result<{
   name: string;
   environment: Environment;
   type: SecretType;
+  description: string;
   value: string;
 }> {
   const input = asObject(body);
@@ -51,17 +60,19 @@ export function parseSecretCreate(body: unknown): Result<{
   if (!environment) return fail("Choose an environment.");
   const type = typeOf(input.type);
   if (!type) return fail("Choose a type.");
+  const description = checkSecretDescription(input.description);
+  if (!description.ok) return description;
   const value = checkValue(input.value);
   if (!value.ok) return value;
-  return { ok: true, data: { projectId, name: name.name, environment, type, value: value.value } };
+  return { ok: true, data: { projectId, name: name.name, environment, type, description: description.description, value: value.value } };
 }
 
 /** Only the fields that are present are changed. Leave `value` out to keep the stored value. */
 export function parseSecretUpdate(
   body: unknown,
-): Result<{ name?: string; environment?: Environment; type?: SecretType; value?: string; projectId?: string }> {
+): Result<{ name?: string; environment?: Environment; type?: SecretType; description?: string; value?: string; projectId?: string }> {
   const input = asObject(body);
-  const data: { name?: string; environment?: Environment; type?: SecretType; value?: string; projectId?: string } = {};
+  const data: { name?: string; environment?: Environment; type?: SecretType; description?: string; value?: string; projectId?: string } = {};
 
   if ("projectId" in input) {
     const projectId = asString(input.projectId);
@@ -82,6 +93,11 @@ export function parseSecretUpdate(
     const type = typeOf(input.type);
     if (!type) return fail("Choose a type.");
     data.type = type;
+  }
+  if ("description" in input) {
+    const description = checkSecretDescription(input.description);
+    if (!description.ok) return description;
+    data.description = description.description;
   }
   if ("value" in input) {
     const value = checkValue(input.value);
@@ -147,21 +163,32 @@ export function parseMemberInvite(body: unknown): Result<{ email: string; role: 
   return role.ok ? { ok: true, data: { email, role: role.data.role } } : role;
 }
 
-export function parseExport(body: unknown): Result<{ projectId: string; environment: Environment }> {
+export function parseExport(body: unknown): Result<{ projectId: string; environment: Environment; format: TransferFormat }> {
   const input = asObject(body);
   const projectId = asString(input.projectId) ?? "";
   if (!projectId) return fail("Choose a project.");
   const environment = environmentOf(input.environment);
   if (!environment) return fail("Choose an environment.");
-  return { ok: true, data: { projectId, environment } };
+  const format = formatOf(input.format);
+  if (!format) return fail("Choose .env or JSON.");
+  return { ok: true, data: { projectId, environment, format } };
 }
 
-export function parseImport(body: unknown): Result<{ projectId: string; environment: Environment; content: string; overwrite: boolean }> {
+export function parseImport(body: unknown): Result<{ projectId: string; environment: Environment; format: TransferFormat; content: string; overwrite: boolean }> {
   const input = asObject(body);
   const exported = parseExport(input);
   if (!exported.ok) return exported;
   const content = asString(input.content) ?? "";
-  if (!content.trim()) return fail("Paste or choose a .env file first.");
+  if (!content.trim()) return fail("Paste or choose a file first.");
   if (content.length > LIMITS.importBytes) return fail(`The file is too big. The limit is ${Math.round(LIMITS.importBytes / 1000)} KB.`);
   return { ok: true, data: { ...exported.data, content, overwrite: input.overwrite === true } };
+}
+
+/** Restoring a whole-vault backup: the file's text, and whether to replace values that already exist. */
+export function parseBackupImport(body: unknown): Result<{ content: string; overwrite: boolean }> {
+  const input = asObject(body);
+  const content = asString(input.content) ?? "";
+  if (!content.trim()) return fail("Choose a backup file first.");
+  if (content.length > LIMITS.backupBytes) return fail(`The file is too big. The limit is ${Math.round(LIMITS.backupBytes / 1_000_000)} MB.`);
+  return { ok: true, data: { content, overwrite: input.overwrite === true } };
 }

@@ -6,9 +6,10 @@ import { apiError, authorize, handleError, noStore, requireStepUp } from "@/lib/
 import { serializeEnv } from "@/lib/dotenv";
 import { rateLimit } from "@/lib/request-guard";
 import { parseExport } from "@/lib/vault-input";
+import { serializeJsonVariables } from "@/lib/vault-json";
 
-// POST /api/vault/export  { projectId, environment }  ->  { content, count, skipped, projectName }
-// Decrypts every secret of that project and environment into .env text. It is a POST (same-origin check) and
+// POST /api/vault/export  { projectId, environment, format? }  ->  { content, count, skipped, projectName }
+// Decrypts every secret of that project and environment into .env text, or into a JSON object when `format` is "json". It is a POST (same-origin check) and
 // rate limited, because it is the biggest way to take values out. Each exported secret is logged.
 export async function POST(request: Request) {
   const auth = await authorize(request, { mutating: true });
@@ -32,10 +33,16 @@ export async function POST(request: Request) {
   try {
     const access = await projectAccess(auth.userId, projectId);
     if (!access) return apiError("Project not found.", 404);
-    const result = await exportSecrets(access.ownerId, auth.actor, { projectId, environment: parsed.data.environment });
+    const json = parsed.data.format === "json";
+    const result = await exportSecrets(access.ownerId, auth.actor, {
+      projectId,
+      environment: parsed.data.environment,
+      envNamesOnly: !json,
+      destination: json ? "a JSON file" : "a .env file",
+    });
     if (!result) return apiError("Project not found.", 404);
     return NextResponse.json(
-      { content: serializeEnv(result.entries), count: result.entries.length, skipped: result.skipped, projectName: result.projectName },
+      { content: json ? serializeJsonVariables(result.entries) : serializeEnv(result.entries), count: result.entries.length, skipped: result.skipped, projectName: result.projectName },
       { headers: noStore },
     );
   } catch (error) {
