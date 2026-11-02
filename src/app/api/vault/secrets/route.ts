@@ -21,7 +21,7 @@ export async function GET(request: Request) {
   }
 }
 
-// POST /api/vault/secrets  { projectId, name, environment, type, value }  ->  stores the value encrypted
+// POST /api/vault/secrets  { projectId, name, environment, type, value, description? }  ->  stores the value encrypted
 export async function POST(request: Request) {
   const auth = await authorize(request, { mutating: true });
   if (auth instanceof Response) return auth;

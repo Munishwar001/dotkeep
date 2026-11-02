@@ -54,6 +54,7 @@ function SecretForm({ projects: allProjects, defaultProjectId, secret, prefill, 
   );
   const [environment, setEnvironment] = useState<Environment>(secret?.environment ?? prefill?.environment ?? "local");
   const [type, setType] = useState<SecretType>(secret?.type ?? "api_key");
+  const [description, setDescription] = useState(secret?.description ?? "");
   const [value, setValue] = useState("");
   const [showValue, setShowValue] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,10 +74,11 @@ function SecretForm({ projects: allProjects, defaultProjectId, secret, prefill, 
           name,
           environment,
           type,
+          description,
           ...(projectId !== secret.projectId ? { projectId } : {}), // a different project = move the secret there
           ...(value ? { value } : {}), // blank = keep the stored value
         })
-      : await api("POST", "/api/vault/secrets", { projectId, name, environment, type, value });
+      : await api("POST", "/api/vault/secrets", { projectId, name, environment, type, description, value });
     if (!result.ok) {
       setError(result.error);
       setPending(false);
@@ -123,6 +125,19 @@ function SecretForm({ projects: allProjects, defaultProjectId, secret, prefill, 
             </NativeSelect>
           </Field>
         </div>
+
+        <Field>
+          <FieldLabel htmlFor="secret-description">Notes (optional)</FieldLabel>
+          <Textarea
+            id="secret-description"
+            rows={2}
+            placeholder="What it is for, where it came from, when it expires"
+            maxLength={LIMITS.secretDescription}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+          <FieldDescription>Notes are not encrypted. Don’t put the secret value here.</FieldDescription>
+        </Field>
 
         <Field>
           <div className="auth-label-row">

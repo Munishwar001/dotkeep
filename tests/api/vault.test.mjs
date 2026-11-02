@@ -251,3 +251,160 @@ describe("deleting a project", () => {
     assert.ok(actions.includes("deleted"));
   });
 });
+
+describe("secret notes", () => {
+  it("saves notes on create, changes them on update, and trims them", async () => {
+    const project = (await alice.call("POST", "/api/vault/projects", { name: "Notes", description: "" })).data.project;
+    const made = await alice.call("POST", "/api/vault/secrets", { projectId: project.id, name: "N", environment: "local", type: "other", value: "1", description: "  for the mailer  " });
+    assert.equal(made.data.secret.description, "for the mailer");
+    const patched = await alice.call("PATCH", `/api/vault/secrets/${made.data.secret.id}`, { description: "rotated in March" });
+    assert.equal(patched.data.secret.description, "rotated in March");
+    assert.equal((await secretsOf(alice, project.id))[0].description, "rotated in March");
+  });
+
+  it("defaults to empty notes and rejects notes that are too long", async () => {
+    const project = (await alice.call("POST", "/api/vault/projects", { name: "NotesB", description: "" })).data.project;
+    const made = await alice.call("POST", "/api/vault/secrets", { projectId: project.id, name: "N", environment: "local", type: "other", value: "1" });
+    assert.equal(made.data.secret.description, "");
+    const long = await alice.call("PATCH", `/api/vault/secrets/${made.data.secret.id}`, { description: "x".repeat(501) });
+    assert.equal(long.status, 400);
+  });
+
+  it("logs that the notes changed, without the text", async () => {
+    const project = (await alice.call("POST", "/api/vault/projects", { name: "NotesC", description: "" })).data.project;
+    const made = (await alice.call("POST", "/api/vault/secrets", { projectId: project.id, name: "N", environment: "local", type: "other", value: "1" })).data.secret;
+    await alice.call("PATCH", `/api/vault/secrets/${made.id}`, { description: "private remark" });
+    const events = (await alice.call("GET", `/api/vault/secrets/${made.id}/activity`)).data.events;
+    assert.ok(events.some((e) => e.action === "updated" && e.detail === "notes changed"));
+    assert.ok(!JSON.stringify(events).includes("private remark"));
+  });
+});
+
+describe("JSON import and export of one environment", () => {
+  let project, other;
+
+  before(async () => {
+    project = (await alice.call("POST", "/api/vault/projects", { name: "JsonSrc", description: "" })).data.project;
+    other = (await alice.call("POST", "/api/vault/projects", { name: "JsonDst", description: "" })).data.project;
+    await alice.call("POST", "/api/vault/import", { projectId: project.id, environment: "staging", content: 'A=1\nMULTI="line1\\nline2"' });
+    await alice.call("POST", "/api/vault/secrets", { projectId: project.id, name: "has space", environment: "staging", type: "other", value: "kept" });
+  });
+
+  it("exports a flat JSON object, including names a .env file can't hold", async () => {
+    const r = await alice.call("POST", "/api/vault/export", { projectId: project.id, environment: "staging", format: "json" });
+    assert.equal(r.status, 200);
+    assert.equal(r.data.count, 3);
+    assert.deepEqual(r.data.skipped, []);
+    assert.deepEqual(JSON.parse(r.data.content), { A: "1", MULTI: "line1\nline2", "has space": "kept" });
+  });
+
+  it("imports JSON, reports what it can't use, and round-trips", async () => {
+    const exported = (await alice.call("POST", "/api/vault/export", { projectId: project.id, environment: "staging", format: "json" })).data.content;
+    const r = await alice.call("POST", "/api/vault/import", { projectId: other.id, environment: "production", format: "json", content: exported });
+    assert.equal(r.data.created, 3);
+    const again = (await alice.call("POST", "/api/vault/export", { projectId: other.id, environment: "production", format: "json" })).data.content;
+    assert.equal(again, exported);
+
+    const messy = await alice.call("POST", "/api/vault/import", { projectId: other.id, environment: "local", format: "json", content: '{ "OK": "1", "BAD": { "x": 1 } }' });
+    assert.equal(messy.data.created, 1);
+    assert.equal(messy.data.lineErrors.length, 1);
+  });
+
+  it("rejects JSON that isn't an object, and an unknown format", async () => {
+    let r = await alice.call("POST", "/api/vault/import", { projectId: other.id, environment: "local", format: "json", content: "A=1" });
+    assert.equal(r.status, 400);
+    r = await alice.call("POST", "/api/vault/import", { projectId: other.id, environment: "local", format: "yaml", content: "A: 1" });
+    assert.equal(r.status, 400);
+  });
+});
+
+describe("whole-vault backup", () => {
+  let carol, dave, exported;
+
+  before(async () => {
+    [carol, dave] = [await world.user("carol"), await world.user("dave")];
+    const shop = (await carol.call("POST", "/api/vault/projects", { name: "Shop", description: "the store" })).data.project;
+    const blog = (await carol.call("POST", "/api/vault/projects", { name: "Blog", description: "" })).data.project;
+    const add = (projectId, name, environment, type, value, description = "") => carol.call("POST", "/api/vault/secrets", { projectId, name, environment, type, value, description });
+    await add(shop.id, "STRIPE_KEY", "production", "api_key", "sk_live", "live key");
+    await add(shop.id, "STRIPE_KEY", "local", "api_key", "sk_test");
+    await add(blog.id, "DB", "staging", "database_url", "postgres://x");
+  });
+
+  it("exports every project with environments, types and notes", async () => {
+    const r = await carol.call("POST", "/api/vault/backup/export");
+    assert.equal(r.status, 200);
+    assert.equal(r.data.projects, 2);
+    assert.equal(r.data.secrets, 3);
+    exported = r.data.content;
+    const file = JSON.parse(exported);
+    assert.equal(file.app, "dotkeep");
+    const shop = file.projects.find((p) => p.name === "Shop");
+    assert.equal(shop.description, "the store");
+    assert.deepEqual(
+      shop.secrets.map((s) => [s.name, s.environment, s.type, s.description, s.value]),
+      [["STRIPE_KEY", "local", "api_key", "", "sk_test"], ["STRIPE_KEY", "production", "api_key", "live key", "sk_live"]],
+    );
+  });
+
+  it("logs one export per secret", async () => {
+    const shop = (await carol.call("GET", "/api/vault/projects")).data.projects.find((p) => p.name === "Shop");
+    const secret = (await secretsOf(carol, shop.id)).find((s) => s.environment === "production");
+    const actions = (await carol.call("GET", `/api/vault/secrets/${secret.id}/activity`)).data.events.map((e) => e.action);
+    assert.ok(actions.includes("exported"));
+  });
+
+  it("restores into another account: creates the projects and every secret", async () => {
+    const r = await dave.call("POST", "/api/vault/backup/import", { content: exported });
+    assert.equal(r.status, 200);
+    assert.equal(r.data.projectsCreated, 2);
+    assert.equal(r.data.created, 3);
+    assert.deepEqual(r.data.failed, []);
+
+    const shop = (await dave.call("GET", "/api/vault/projects")).data.projects.find((p) => p.name === "Shop");
+    assert.equal(shop.description, "the store");
+    const live = (await secretsOf(dave, shop.id)).find((s) => s.environment === "production");
+    assert.equal(live.type, "api_key");
+    assert.equal(live.description, "live key");
+    assert.equal((await dave.call("POST", `/api/vault/secrets/${live.id}/reveal`, {})).data.value, "sk_live");
+
+    // and a backup of the restored vault is the same file
+    const again = JSON.parse((await dave.call("POST", "/api/vault/backup/export")).data.content);
+    assert.deepEqual(again.projects, JSON.parse(exported).projects);
+  });
+
+  it("restoring again skips what exists, unless overwrite is on", async () => {
+    let r = await dave.call("POST", "/api/vault/backup/import", { content: exported });
+    assert.deepEqual([r.data.projectsCreated, r.data.created, r.data.skipped], [0, 0, 3]);
+
+    r = await dave.call("POST", "/api/vault/backup/import", { content: exported, overwrite: true });
+    assert.deepEqual([r.data.created, r.data.updated, r.data.unchanged], [0, 0, 3]);
+
+    const changed = JSON.parse(exported);
+    changed.projects.find((p) => p.name === "Shop").secrets.find((s) => s.environment === "production").value = "sk_live_2";
+    r = await dave.call("POST", "/api/vault/backup/import", { content: JSON.stringify(changed), overwrite: true });
+    assert.deepEqual([r.data.updated, r.data.unchanged], [1, 2]);
+  });
+
+  it("rejects files that aren't backups, and skips unusable secrets", async () => {
+    for (const content of ["", "not json", '{ "A": "1" }', JSON.stringify({ app: "dotkeep", version: 1, projects: [] })]) {
+      assert.equal((await dave.call("POST", "/api/vault/backup/import", { content })).status, 400);
+    }
+    const partial = JSON.stringify({
+      app: "dotkeep",
+      version: 1,
+      projects: [{ name: "Partial", secrets: [{ name: "OK", environment: "local", type: "other", value: "1" }, { name: "BAD", environment: "qa", type: "other", value: "1" }] }],
+    });
+    const r = await dave.call("POST", "/api/vault/backup/import", { content: partial });
+    assert.equal(r.data.created, 1);
+    assert.equal(r.data.issues.length, 1);
+  });
+
+  it("only exports the caller's own vault", async () => {
+    const eve = await world.user("eve");
+    const r = await eve.call("POST", "/api/vault/backup/export");
+    assert.equal(r.status, 200);
+    assert.equal(r.data.secrets, 0);
+    assert.ok(!r.data.content.includes("sk_live"));
+  });
+});

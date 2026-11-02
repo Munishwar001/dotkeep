@@ -24,6 +24,7 @@ export type SecretDoc = {
   nameKey: string;
   environment: Environment;
   type: SecretType;
+  description?: string; // notes about the secret (plain text, not encrypted). Missing on secrets saved before this existed.
   valueEncrypted: string; // AES-256-GCM, see src/lib/vault-crypto.ts. Never the plain value.
   createdAt: Date;
   updatedAt: Date;
