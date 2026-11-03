@@ -36,7 +36,7 @@ function strength(password: string) {
   return { score, label: ["", "Weak", "Fair", "Good", "Strong"][score] };
 }
 
-export function AuthForm({ mode }: { mode: Mode }) {
+export function AuthForm({ mode, onTwoFactor }: { mode: Mode; onTwoFactor?: () => void }) {
   const router = useRouter();
   const [values, setValues] = useState<Values>({ name: "", email: "", password: "" });
   const [touched, setTouched] = useState<Partial<Record<keyof Values, boolean>>>({});
@@ -78,7 +78,13 @@ export function AuthForm({ mode }: { mode: Mode }) {
         body: JSON.stringify(mode === "signup" ? values : { email: values.email, password: values.password }),
       });
 
-      const data = (await response.json().catch(() => null)) as { error?: string; code?: string; emailSent?: boolean } | null;
+      const data = (await response.json().catch(() => null)) as { error?: string; code?: string; emailSent?: boolean; twoFactorRequired?: boolean } | null;
+
+      // Right password, but no session yet: the account wants a code from its authenticator app.
+      if (response.ok && data?.twoFactorRequired) {
+        onTwoFactor?.();
+        return;
+      }
 
       if (response.ok) {
         // Signing up only creates the account and emails a link; the person verifies, then signs in on the login page.

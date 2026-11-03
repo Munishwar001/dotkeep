@@ -7,7 +7,7 @@ import { parseSecretUpdate } from "@/lib/vault-input";
 
 type Context = { params: Promise<{ id: string }> };
 
-// PATCH /api/vault/secrets/:id  { name?, environment?, type?, value?, projectId? }  ->  only the fields you send change.
+// PATCH /api/vault/secrets/:id  { name?, environment?, type?, description?, value?, projectId? }  ->  only the fields you send change.
 // A new projectId moves the secret to another of your projects. A new value keeps the old one in the history.
 export async function PATCH(request: Request, { params }: Context) {
   const auth = await authorize(request, { mutating: true });

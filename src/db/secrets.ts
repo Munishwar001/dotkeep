@@ -23,6 +23,7 @@ export type PublicSecret = {
   name: string;
   environment: Environment;
   type: SecretType;
+  description: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -33,6 +34,7 @@ const toPublic = (doc: SecretDoc): PublicSecret => ({
   name: doc.name,
   environment: doc.environment,
   type: doc.type,
+  description: doc.description ?? "",
   createdAt: doc.createdAt.toISOString(),
   updatedAt: doc.updatedAt.toISOString(),
 });
@@ -75,7 +77,7 @@ export async function usedEnvironments(actorId: ObjectId): Promise<string[]> {
 export async function createSecret(
   userId: ObjectId,
   actor: Actor,
-  input: { projectId: ObjectId; name: string; environment: Environment; type: SecretType; value: string },
+  input: { projectId: ObjectId; name: string; environment: Environment; type: SecretType; value: string; description?: string },
   options: { action?: AuditAction; detail?: string } = {},
 ): Promise<PublicSecret | null> {
   const { projects, secrets } = await collections();
@@ -94,6 +96,7 @@ export async function createSecret(
     nameKey: keyOf(input.name),
     environment: input.environment,
     type: input.type,
+    description: input.description ?? "",
     valueEncrypted: encryptSecret(input.value, contextOf(userId, _id)),
     createdAt: now,
     updatedAt: now,
@@ -110,7 +113,7 @@ export async function createSecret(
   return toPublic(doc);
 }
 
-type Patch = { name?: string; environment?: Environment; type?: SecretType; value?: string; projectId?: ObjectId };
+export type Patch = { name?: string; environment?: Environment; type?: SecretType; description?: string; value?: string; projectId?: ObjectId };
 
 /**
  * Only the fields you pass are changed. Leave `value` out to keep the stored value. Returns null if the secret
@@ -129,6 +132,7 @@ export async function updateSecret(
   if (patch.name !== undefined) Object.assign(changes, { name: patch.name, nameKey: keyOf(patch.name) });
   if (patch.environment !== undefined) changes.environment = patch.environment;
   if (patch.type !== undefined) changes.type = patch.type;
+  if (patch.description !== undefined) changes.description = patch.description;
   if (patch.value !== undefined) changes.valueEncrypted = encryptSecret(patch.value, contextOf(userId, secretId));
 
   let target: { _id: ObjectId; name: string } | null = null;
@@ -156,6 +160,7 @@ export async function updateSecret(
     diffs.push(`environment ${environmentLabel(before.environment)} → ${environmentLabel(patch.environment)}`);
   }
   if (patch.type !== undefined && patch.type !== before.type) diffs.push(`type ${secretTypeLabel(before.type)} → ${secretTypeLabel(patch.type)}`);
+  if (patch.description !== undefined && patch.description !== (before.description ?? "")) diffs.push("notes changed"); // the text itself stays out of the log
   if (diffs.length) events.push(eventOf(after, actor, "updated", diffs.join(", ")));
 
   if (target && !target._id.equals(before.projectId)) {

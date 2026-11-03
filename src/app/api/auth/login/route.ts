@@ -1,13 +1,14 @@
 import { logError } from "@/lib/logger";
 import { NextResponse } from "next/server";
 import { createSession } from "@/db/sessions";
+import { createChallenge } from "@/db/two-factor";
 import { findUserByEmail, isBlocked, isEmailVerified, normalizeEmail, recordLogin, toPublicUser } from "@/db/users";
 import { parseLogin } from "@/lib/auth-input";
 import { deviceLabel } from "@/lib/device-label";
 import { isMongoConfigured } from "@/lib/mongodb";
 import { verifyPassword } from "@/lib/password";
 import { clientIp, isSameOriginJson, rateLimit } from "@/lib/request-guard";
-import { SESSION_COOKIE, sessionCookieOptions } from "@/lib/session";
+import { SESSION_COOKIE, sessionCookieOptions, TWO_FACTOR_COOKIE, twoFactorCookieOptions } from "@/lib/session";
 
 const WRONG = "Incorrect email or password.";
 
@@ -51,6 +52,14 @@ export async function POST(request: Request) {
     // Also only after the right password, for the same reason.
     if (isBlocked(user)) {
       return NextResponse.json({ error: "This account has been blocked. Contact an administrator.", code: "account_blocked" }, { status: 403 });
+    }
+
+    // Right password, but this account wants a second step. No session yet: only a challenge that /api/auth/2fa can finish.
+    if (user.twoFactor) {
+      const challenge = await createChallenge(user._id);
+      const response = NextResponse.json({ twoFactorRequired: true });
+      response.cookies.set(TWO_FACTOR_COOKIE, challenge.token, twoFactorCookieOptions(challenge.expiresAt));
+      return response;
     }
 
     const { token, expiresAt } = await createSession(user._id, deviceLabel(request.headers.get("user-agent")));

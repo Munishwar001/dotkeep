@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Check, Columns3, Copy, Download, Eye, EyeOff, History, KeyRound, List, ListChecks, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
+import { Archive, ArchiveRestore, Check, Columns3, Copy, Download, Eye, EyeOff, History, KeyRound, List, ListChecks, MoreHorizontal, Pencil, Plus, Search, Trash2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select";
 import type { PublicSecret } from "@/db/secrets";
+import { BackupDialog, type BackupMode } from "./backup-dialog";
 import { BulkEditDialog } from "./bulk-edit-dialog";
 import { api } from "./client-api";
 import { ConfirmDialog } from "./confirm-dialog";
@@ -47,6 +48,7 @@ export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds 
 
   const [history, setHistory] = useState<PublicSecret | null>(null);
   const [transfer, setTransfer] = useState<TransferMode | null>(null);
+  const [backup, setBackup] = useState<BackupMode | null>(null);
 
   // Bulk actions: tick rows, then edit or delete them all at once.
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -67,7 +69,7 @@ export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds 
   const hasFilters = Boolean(query || projectFilter || environmentFilter || typeFilter);
   const visible = secrets.filter(
     (secret) =>
-      (!query || secret.name.toLowerCase().includes(query.trim().toLowerCase())) &&
+      (!query || `${secret.name} ${secret.description}`.toLowerCase().includes(query.trim().toLowerCase())) &&
       (!projectFilter || secret.projectId === projectFilter) &&
       (!environmentFilter || secret.environment === environmentFilter) &&
       (!typeFilter || secret.type === typeFilter),
@@ -204,10 +206,17 @@ export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds 
         )}
         {projects.length > 0 && (
           <DropdownMenu>
-            <DropdownMenuTrigger className="vt-more-button" aria-label=".env import and export"><Upload aria-hidden="true" /> .env</DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
-              {canAdd && <DropdownMenuItem onClick={() => setTransfer("import")}><Upload aria-hidden="true" /> Import .env file</DropdownMenuItem>}
-              <DropdownMenuItem onClick={() => setTransfer("export")}><Download aria-hidden="true" /> Export to .env</DropdownMenuItem>
+            <DropdownMenuTrigger className="vt-more-button" aria-label="Import and export"><Upload aria-hidden="true" /> Import / export</DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              {canAdd && <DropdownMenuItem onClick={() => setTransfer("import")}><Upload aria-hidden="true" /> Import .env or JSON</DropdownMenuItem>}
+              <DropdownMenuItem onClick={() => setTransfer("export")}><Download aria-hidden="true" /> Export .env or JSON</DropdownMenuItem>
+              {!fixedProjectId && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={() => setBackup("export")}><Archive aria-hidden="true" /> Back up whole vault</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setBackup("restore")}><ArchiveRestore aria-hidden="true" /> Restore backup</DropdownMenuItem>
+                </>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
         )}
@@ -312,7 +321,7 @@ export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds 
                   <input type="checkbox" className="vt-checkbox" aria-label={`Select ${secret.name}`} checked={selected.has(secret.id)} onChange={() => toggleSelected(secret.id)} />
                 )}
               </div>
-              <div role="cell" className="vt-name"><b>{secret.name}</b><small>{secretTypeLabel(secret.type)}</small></div>
+              <div role="cell" className="vt-name"><b>{secret.name}</b><small>{secretTypeLabel(secret.type)}</small>{secret.description && <small className="vt-notes" title={secret.description}>{secret.description}</small>}</div>
               {!fixedProjectId && (
                 <div role="cell" className="vt-project" data-label="Project">
                   <Link href={`/dashboard/projects/${secret.projectId}`}>{projectName(secret.projectId)}</Link>
@@ -348,6 +357,8 @@ export function SecretsTable({ secrets, projects, fixedProjectId, revealSeconds 
         defaultProjectId={fixedProjectId ?? (projectFilter || undefined)}
         defaultEnvironment={(environmentFilter || undefined) as Environment | undefined}
       />
+
+      <BackupDialog mode={backup} onOpenChange={(open) => !open && setBackup(null)} />
 
       <BulkEditDialog open={bulkEditing} onOpenChange={setBulkEditing} ids={selectedIds} projects={movableProjects} onDone={afterBulk} />
 

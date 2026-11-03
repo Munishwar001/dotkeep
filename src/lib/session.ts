@@ -20,6 +20,17 @@ export function sessionCookieOptions(expiresAt: Date) {
 }
 
 /**
+ * The cookie that carries a two-step sign-in challenge: the password was right, a code is still owed. It is sent only
+ * to the one route that checks the code, and it opens nothing by itself.
+ */
+export const TWO_FACTOR_COOKIE = "dotkeep_2fa";
+export const TWO_FACTOR_COOKIE_PATH = "/api/auth/2fa";
+
+export function twoFactorCookieOptions(expiresAt: Date) {
+  return { ...sessionCookieOptions(expiresAt), path: TWO_FACTOR_COOKIE_PATH };
+}
+
+/**
  * The logged-in user for the current request, or null. Use this in Server Components.
  * cache() makes it run once per request: the sidebar, the page and the top bar all ask for the user, and without it
  * each of them would repeat the two database lookups (session, then user).

@@ -10,7 +10,9 @@ import { DeleteAccount } from "@/modules/settings/delete-account";
 import { PasswordForm } from "@/modules/settings/password-form";
 import { PreferencesForm } from "@/modules/settings/preferences-form";
 import { ProfileForm } from "@/modules/settings/profile-form";
+import { SecretsLockForm } from "@/modules/settings/secrets-lock-form";
 import { SessionsList } from "@/modules/settings/sessions-list";
+import { TwoFactorForm } from "@/modules/settings/two-factor-form";
 
 export const metadata: Metadata = {
   title: "Settings — Dotkeep",
@@ -49,13 +51,19 @@ async function SettingsContent() {
           <Section id="password" index={1} title="Password" text="Use a long, unique password.">
             <PasswordForm />
           </Section>
-          <Section id="vault" index={2} title="Vault" text="How the vault behaves for you.">
+          <Section id="two-factor" index={2} title="Two-factor authentication" text="Ask for a code from your phone each time you sign in, on top of your password.">
+            <TwoFactorForm enabled={user.twoFactorEnabled} />
+          </Section>
+          <Section id="secrets-lock" index={3} title="Protect secret values" text="Ask for a code from your authenticator app before a secret is revealed, copied or exported. Good for a shared computer.">
+            <SecretsLockForm twoFactorEnabled={user.twoFactorEnabled} enabled={user.secretsNeedCode} />
+          </Section>
+          <Section id="vault" index={4} title="Vault" text="How the vault behaves for you.">
             <PreferencesForm revealSeconds={user.revealSeconds} />
           </Section>
-          <Section id="sessions" index={3} wide title="Where you’re signed in" text="Sign out any device you don’t recognize. Sessions last 7 days.">
+          <Section id="sessions" index={5} wide title="Where you’re signed in" text="Sign out any device you don’t recognize. Sessions last 7 days.">
             <SessionsList sessions={sessions} />
           </Section>
-          <Section id="danger" index={4} danger title="Delete account" text="Permanently deletes your account, projects, secrets and sessions. This can’t be undone.">
+          <Section id="danger" index={6} danger title="Delete account" text="Permanently deletes your account, projects, secrets and sessions. This can’t be undone.">
             <DeleteAccount />
           </Section>
         </div>

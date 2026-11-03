@@ -14,6 +14,7 @@ Uses Node's built-in test runner. No extra packages.
 | `tests/unit/` | `.env` parser and writer, email masking, vault encryption (round trip, tampering, wrong context) | nothing |
 | `tests/api/vault.test.mjs` | `.env` import/export, version history, move, bulk edit/delete, audit log, other users can't touch any of it | server + MongoDB |
 | `tests/api/sharing.test.mjs` | Project sharing: owner / editor / viewer / outsider, 404 vs 403, moving between owners, who sees the audit log | server + MongoDB |
+| `tests/api/two-factor.test.mjs` | 2FA: setup, the code step at login, replay and 5-wrong-codes limits, recovery codes, turning it off | server + MongoDB |
 | `tests/api/admin.test.mjs` | Admin block / unblock / delete, guards (self, other admins), email masking on the server | server + MongoDB |
 
 ## Running the API tests
