@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Suspense } from "react";
-import { Activity, FolderKanban, KeyRound, LayoutDashboard, Settings, ShieldCheck, type LucideIcon } from "lucide-react";
+import { Activity, BookOpen, FolderKanban, KeyRound, LayoutDashboard, Settings, ShieldCheck, type LucideIcon } from "lucide-react";
 import { getCurrentUser } from "@/lib/session";
 import { Mark } from "@/modules/landing/icons";
 import { NavLink } from "./nav-link";
@@ -47,6 +47,9 @@ export function Sidebar() {
         <Suspense fallback={null}>
           <AdminNavItem />
         </Suspense>
+        <NavLink href="/dashboard/docs">
+          <BookOpen aria-hidden="true" /> Docs
+        </NavLink>
       </nav>
 
       <p className="dash-side-note">Early days. More of Dotkeep is on the way.</p>
