@@ -4,6 +4,7 @@ import { Activity, BookOpen, FolderKanban, KeyRound, LayoutDashboard, Settings, 
 import { getCurrentUser } from "@/lib/session";
 import { Mark } from "@/modules/landing/icons";
 import { NavLink } from "./nav-link";
+import { CollapseButton } from "./shell";
 
 type NavItem = { label: string; icon: LucideIcon; href: string; exact?: boolean };
 
@@ -22,7 +23,7 @@ async function AdminNavItem() {
   if (user?.role !== "admin") return null;
   return (
     <NavLink href="/dashboard/admin">
-      <ShieldCheck aria-hidden="true" /> Admin
+      <ShieldCheck aria-hidden="true" /> <span className="dash-nav-label">Admin</span>
     </NavLink>
   );
 }
@@ -33,26 +34,26 @@ async function AdminNavItem() {
  */
 export function Sidebar() {
   return (
-    <aside className="dash-side">
-      <Link className="wordmark" href="/" aria-label="Dotkeep home"><Mark /><span>dotkeep</span></Link>
+    <aside className="dash-side" id="dash-sidebar">
+      <Link className="wordmark" href="/" aria-label="Dotkeep home"><Mark /><span className="dash-nav-label">dotkeep</span></Link>
 
       <nav className="dash-nav" aria-label="Dashboard">
         <p className="dash-nav-caption">WORKSPACE</p>
         {items.map(({ label, icon: ItemIcon, href, exact }) => (
           <NavLink key={label} href={href} exact={exact}>
-            <ItemIcon aria-hidden="true" /> {label}
+            <ItemIcon aria-hidden="true" /> <span className="dash-nav-label">{label}</span>
           </NavLink>
         ))}
         {/* Reads the session cookie (request-time data), so it streams in inside Suspense. */}
         <Suspense fallback={null}>
           <AdminNavItem />
         </Suspense>
-        <NavLink href="/dashboard/docs">
-          <BookOpen aria-hidden="true" /> Docs
+        <NavLink href="/docs">
+          <BookOpen aria-hidden="true" /> <span className="dash-nav-label">Docs</span>
         </NavLink>
       </nav>
 
-      <p className="dash-side-note">Early days. More of Dotkeep is on the way.</p>
+      <CollapseButton />
     </aside>
   );
 }

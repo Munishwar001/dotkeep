@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
+import Link from "next/link";
+import { Suspense } from "react";
 import { AlertTriangle, Info } from "lucide-react";
-import { requireUser } from "@/modules/dashboard/data";
-import { DashboardFrame } from "@/modules/dashboard/frame";
-import { Topbar } from "@/modules/dashboard/overview";
-import { PageHeader } from "@/modules/dashboard/page-header";
+import { Button } from "@/components/ui/button";
+import { getCurrentUser } from "@/lib/session";
+import { Icon, Mark } from "@/modules/landing/icons";
 
 export const metadata: Metadata = {
   title: "Docs — Dotkeep",
-  robots: { index: false },
+  description: "How Dotkeep works: projects and secrets, how your data is protected, sharing, settings and what is not available yet.",
 };
 
 function Callout({ tone = "info", title, children }: { tone?: "info" | "warn"; title: string; children: React.ReactNode }) {
@@ -270,15 +271,41 @@ const sections: { id: string; title: string; body: React.ReactNode }[] = [
   },
 ];
 
-async function DocsContent() {
-  const { user } = await requireUser();
+/** Signed-in visitors get a link back to the app. It reads the session cookie, so it streams in inside Suspense. */
+async function HeaderActions() {
+  const user = await getCurrentUser();
+  if (user) {
+    return <Button nativeButton={false} size="sm" className="h-9 gap-2 px-3.5 text-xs" render={<Link href="/dashboard" />}>Dashboard <Icon name="arrow" /></Button>;
+  }
   return (
     <>
-      <Topbar user={user} title="Docs" />
-      <main className="dash-content">
-        <PageHeader kicker="DOCS" title="How Dotkeep works" text="Everything about projects, secrets, sharing, settings and how your data is kept safe." />
+      <Link className="sign-in" href="/login">Sign in</Link>
+      <Button nativeButton={false} size="sm" className="h-9 gap-2 px-3.5 text-xs" render={<Link href="/signup" />}>Get started <Icon name="arrow" /></Button>
+    </>
+  );
+}
+
+export default function DocsPage() {
+  return (
+    <>
+      <header className="site-header">
+        <div className="header-inner">
+          <Link className="wordmark" href="/" aria-label="Dotkeep home"><Mark /><span>dotkeep</span></Link>
+          <div className="header-actions">
+            <Suspense fallback={null}>
+              <HeaderActions />
+            </Suspense>
+          </div>
+        </div>
+      </header>
+      <main className="docs-page section-shell">
+        <header className="docs-hero">
+          <p className="dash-kicker">DOCS</p>
+          <h1>How Dotkeep works</h1>
+          <p className="dash-lead">Everything about projects, secrets, sharing, settings and how your data is kept safe.</p>
+        </header>
         <div className="docs-layout">
-          <nav className="docs-toc dash-reveal" aria-label="On this page">
+          <nav className="docs-toc" aria-label="On this page">
             <p className="dash-nav-caption">ON THIS PAGE</p>
             {sections.map(({ id, title }) => (
               <a key={id} href={`#${id}`}>{title}</a>
@@ -286,7 +313,7 @@ async function DocsContent() {
           </nav>
           <div className="docs-body">
             {sections.map(({ id, title, body }) => (
-              <section key={id} id={id} className="dash-panel docs-section dash-reveal">
+              <section key={id} id={id} className="dash-panel docs-section">
                 <h2>{title}</h2>
                 {body}
               </section>
@@ -295,13 +322,5 @@ async function DocsContent() {
         </div>
       </main>
     </>
-  );
-}
-
-export default function DocsPage() {
-  return (
-    <DashboardFrame>
-      <DocsContent />
-    </DashboardFrame>
   );
 }
