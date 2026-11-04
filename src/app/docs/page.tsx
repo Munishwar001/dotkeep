@@ -5,6 +5,7 @@ import { AlertTriangle, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/session";
 import { Icon, Mark } from "@/modules/landing/icons";
+import "./docs.css";
 
 export const metadata: Metadata = {
   title: "Docs — Dotkeep",
