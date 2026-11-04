@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { createContext, Suspense, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
@@ -46,24 +46,38 @@ function useShell() {
 }
 
 /**
+ * Closes the mobile drawer when you move to another page. It is its own component because usePathname() has to sit inside
+ * Suspense: on pages with a dynamic part in the URL (like /dashboard/projects/[id]) the pathname is not known while the page
+ * is being prerendered, and reading it in the shell itself fails the build. It renders nothing, so nothing can shift.
+ */
+function CloseOnNavigate({ onNavigate }: { onNavigate: () => void }) {
+  const pathname = usePathname();
+  const last = useRef(pathname);
+  useEffect(() => {
+    if (last.current === pathname) return;
+    last.current = pathname;
+    onNavigate();
+  }, [pathname, onNavigate]);
+  return null;
+}
+
+/**
  * Owns the two bits of sidebar state: the mobile drawer (open or closed) and the desktop collapse (full width or icon rail).
  * It is a client component, but the sidebar and the page are passed in as children, so they stay server-rendered.
  */
 export function DashShell({ sidebar, children }: { sidebar: React.ReactNode; children: React.ReactNode }) {
-  const pathname = usePathname();
-  // The drawer remembers which page it was opened on, so moving to another page closes it without an effect.
-  const [openOn, setOpenOn] = useState<string | null>(null);
-  const navOpen = openOn === pathname;
+  const [navOpen, setNavOpen] = useState(false);
   const collapsed = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
 
   useEffect(() => {
     if (!navOpen) return;
-    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setOpenOn(null);
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setNavOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [navOpen]);
 
-  const toggleNav = useCallback(() => setOpenOn((current) => (current === pathname ? null : pathname)), [pathname]);
+  const closeNav = useCallback(() => setNavOpen(false), []);
+  const toggleNav = useCallback(() => setNavOpen((open) => !open), []);
   const toggleCollapsed = useCallback(() => writeCollapsed(!readCollapsed()), []);
 
   const value = useMemo(() => ({ navOpen, collapsed, toggleNav, toggleCollapsed }), [navOpen, collapsed, toggleNav, toggleCollapsed]);
@@ -72,7 +86,10 @@ export function DashShell({ sidebar, children }: { sidebar: React.ReactNode; chi
     <ShellContext value={value}>
       <div className="dash" data-collapsed={collapsed} data-nav-open={navOpen}>
         {sidebar}
-        <div className="dash-scrim" onClick={() => setOpenOn(null)} aria-hidden="true" />
+        <div className="dash-scrim" onClick={closeNav} aria-hidden="true" />
+        <Suspense fallback={null}>
+          <CloseOnNavigate onNavigate={closeNav} />
+        </Suspense>
         <div className="dash-body">{children}</div>
       </div>
     </ShellContext>
