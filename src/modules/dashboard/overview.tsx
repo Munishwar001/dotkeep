@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Boxes, Check, FolderKanban, KeyRound, type LucideIcon } from "lucide-react";
 import type { PublicUser } from "@/db/users";
 import { formatDate } from "@/modules/vault/format";
-import { Mark } from "@/modules/landing/icons";
+import { MobileNavButton } from "./shell";
 import { UserMenu } from "./user-menu";
 
 export type Counts = { secrets: number; projects: number; environments: number };
@@ -12,9 +12,9 @@ const reveal = (i: number) => ({ "--i": i }) as React.CSSProperties;
 export function Topbar({ user, title }: { user: PublicUser; title: string }) {
   return (
     <header className="dash-top">
-      <Link className="wordmark dash-top-logo" href="/" aria-label="Dotkeep home"><Mark /><span>dotkeep</span></Link>
-      <span className="dash-crumb">{title}</span>
-      <UserMenu name={user.name} email={user.email} role={user.role} />
+      <MobileNavButton />
+      <h2 className="dash-crumb">{title}</h2>
+      <UserMenu name={user.name} email={user.email} />
     </header>
   );
 }
