@@ -69,7 +69,7 @@ Rate limit memory me hai, server restart par reset hota hai (jaise login ka).
 
 ## 6. Mobile par navigation
 
-Chhoti screen par sidebar chhup jati hai, isliye **user menu me** ab links hain: Overview, Vault, Projects, Settings (aur admin ko Admin). Bade screen par ye links menu me nahi dikhte kyunki sidebar hai.
+Chhoti screen par sidebar ek **drawer** ban jati hai. Top bar ke menu button se khulti hai, bahar tap karne ya Escape dabane par band hoti hai, aur dusre page par jate hi apne aap band ho jati hai. Bade screen par sidebar ke neeche **Collapse** button se wo icon rail ban sakti hai (choice browser me yaad rehti hai). User menu me ab sirf account info aur Sign out hai.
 
 ---
 
