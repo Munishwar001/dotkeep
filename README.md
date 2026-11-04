@@ -120,7 +120,7 @@ CI runs types, lint, unit tests, a production build and the API tests against a 
 
 ## Documentation
 
-In-app help lives at **Dashboard → Docs**. Deeper write-ups of each area are in [docs/](docs):
+The docs are public at **/docs** and linked from the sidebar. Deeper write-ups of each area are in [docs/](docs):
 
 | Guide | Covers |
 |---|---|

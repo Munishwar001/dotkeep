@@ -48,7 +48,7 @@ export function Sidebar() {
         <Suspense fallback={null}>
           <AdminNavItem />
         </Suspense>
-        <NavLink href="/dashboard/docs">
+        <NavLink href="/docs">
           <BookOpen aria-hidden="true" /> <span className="dash-nav-label">Docs</span>
         </NavLink>
       </nav>
