@@ -1,19 +1,31 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Icon } from "./icons";
+import { Activity, BookOpen, FolderKanban, KeyRound, LayoutDashboard, Plus, Search, Settings, type LucideIcon } from "lucide-react";
+import { Mark } from "./icons";
 
-const rows = [
-  { icon: "hook", color: "lavender", name: "Discord notifications", type: "Webhook URL", project: "launchpad", updated: "2h ago", sample: "https://discord…x9Qa" },
-  { icon: "database", color: "mint", name: "Supabase · production", type: "Database", project: "launchpad", updated: "Yesterday", sample: "sbp_9f3a…c71e" },
-  { icon: "key", color: "amber", name: "GitHub personal token", type: "Access token", project: "dotkeep-web", updated: "3 days ago", sample: "ghp_Zk82…q4Wd" },
-  { icon: "env", color: "blue", name: "Local environment", type: "Configuration", project: "portfolio", updated: "Oct 12", sample: "NODE_ENV=dev…" },
+// A small copy of the real Vault page: the same sidebar entries, the same table columns, the same environment badges.
+// Everything in it is sample data. Keep it in step with the app: if a feature isn't in the dashboard, it doesn't belong here.
+const nav: { label: string; icon: LucideIcon; active?: boolean }[] = [
+  { label: "Overview", icon: LayoutDashboard },
+  { label: "Vault", icon: KeyRound, active: true },
+  { label: "Projects", icon: FolderKanban },
+  { label: "Activity", icon: Activity },
+  { label: "Settings", icon: Settings },
+  { label: "Docs", icon: BookOpen },
 ];
 
-// Each pass types a query, reveals the matching value briefly, then clears.
+const rows = [
+  { name: "DATABASE_URL", type: "Database URL", env: "production", envLabel: "Production", sample: "postgres://demo@db/app" },
+  { name: "STRIPE_SECRET_KEY", type: "API key", env: "production", envLabel: "Production", sample: "sk_demo_4eC39Hq" },
+  { name: "SLACK_WEBHOOK_URL", type: "Webhook URL", env: "staging", envLabel: "Staging", sample: "https://hooks.demo/T0…" },
+  { name: "NODE_ENV", type: "Environment variable", env: "local", envLabel: "Local", sample: "development" },
+];
+
+// Each pass types a query, reveals the matching value briefly, then clears. This is what the real search and Reveal do.
 const script = [
-  { query: "supa", match: "Supabase · production" },
-  { query: "github", match: "GitHub personal token" },
+  { query: "stripe", match: "STRIPE_SECRET_KEY" },
+  { query: "database", match: "DATABASE_URL" },
 ];
 
 export function ProductPreview() {
@@ -78,49 +90,49 @@ export function ProductPreview() {
   }
 
   const q = query.trim().toLowerCase();
-  const matches = (row: (typeof rows)[number]) => !q || `${row.name} ${row.type} ${row.project}`.toLowerCase().includes(q);
-  const matchCount = rows.filter(matches).length;
+  const matches = (row: (typeof rows)[number]) => !q || `${row.name} ${row.type} ${row.envLabel}`.toLowerCase().includes(q);
 
   return (
-    <div className="preview-wrap" ref={wrapRef} onPointerMove={tilt} onPointerLeave={resetTilt} aria-label="Preview of the Dotkeep vault interface">
+    <div className="preview-wrap" ref={wrapRef} onPointerMove={tilt} onPointerLeave={resetTilt} role="img" aria-label="Preview of the Dotkeep vault page, with sample data">
       <div className="preview-window">
-        <div className="window-bar"><div className="window-dots"><i /><i /><i /></div><div className="window-address"><span className="address-lock">⌑</span> app.dotkeep.dev / vault</div><span className="window-action">···</span></div>
-        <div className="app-shell">
-          <aside className="app-sidebar">
-            <div className="workspace-switch"><span className="workspace-avatar">m</span><span><b>Munish&apos;s workspace</b><small>Personal</small></span><span className="switch-caret">⌄</span></div>
-            <div className="sidebar-caption">WORKSPACE</div>
-            <div className="app-nav active"><span className="nav-symbol">▤</span>All secrets<span className="nav-count">12</span></div>
-            <div className="app-nav"><span className="nav-symbol">◇</span>Projects</div>
-            <div className="app-nav"><span className="nav-symbol">▦</span>Collections</div>
-            <div className="sidebar-caption sidebar-caption-lower">PREFERENCES</div>
-            <div className="app-nav"><span className="nav-symbol">⚙</span>Settings</div>
-            <div className="sidebar-bottom"><span className="avatar-small">M</span><span><b>Munish</b><small>Personal workspace</small></span><span className="more">···</span></div>
+        <div className="window-bar"><div className="window-dots"><i /><i /><i /></div><div className="window-address">Vault · Dotkeep</div><span className="window-action" /></div>
+        <div className="pv" aria-hidden="true">
+          <aside className="pv-side">
+            <div className="pv-brand"><Mark /> dotkeep</div>
+            {nav.map(({ label, icon: NavIcon, active }) => (
+              <div key={label} className={`pv-nav${active ? " is-active" : ""}`}><NavIcon /> {label}</div>
+            ))}
           </aside>
-          <div className="app-main">
-            <div className="app-topline"><div className="breadcrumb">Workspace <span>/</span> All secrets</div><div className="protected"><span /> Vault protected</div></div>
-            <div className="vault-heading"><div><div className="vault-overline">PERSONAL WORKSPACE</div><h2>Your vault<span className="vault-period">.</span></h2><p>Everything you need, in the right place.</p></div><span className="new-secret"><span>+</span> New secret</span></div>
-            <div className="toolbar"><div className={`search-field${query ? " is-typing" : ""}`}><Icon name="search" /> <span className="search-text">{query || "Search secrets"}</span> <kbd>⌘ K</kbd></div><div className="filter-button"><span>☷</span> Filters <i>2</i></div><div className="sort-button">Recently updated <span>⌄</span></div></div>
-            <div className="project-label"><span className="project-dot" /> LAUNCHPAD <span className="project-line" /></div>
-            <div className="secret-table">
-              <div className="table-head"><span>NAME</span><span>VALUE</span><span>UPDATED</span><span /></div>
+          <div className="pv-main">
+            <div className="pv-head">
+              <div>
+                <h3>Vault</h3>
+                <p>Every secret in every project.</p>
+              </div>
+              <span className="pv-button"><Plus /> New secret</span>
+            </div>
+            <div className="pv-toolbar">
+              <div className={`pv-search${query ? " is-typing" : ""}`}><Search /> <span>{query || "Search secrets"}</span></div>
+              <span className="pv-filter">All environments</span>
+            </div>
+            <div className="pv-table">
+              <div className="pv-row pv-th"><span>Name</span><span>Environment</span><span>Value</span></div>
               {rows.map((row) => {
                 const hit = matches(row);
                 const state = [q && !hit ? "is-dim" : "", q && hit ? "is-match" : "", revealed === row.name ? "is-revealed" : ""].join(" ");
                 return (
-                  <div className={`secret-row ${state}`} key={row.name}>
-                    <span className="secret-name"><span className={`secret-icon ${row.color}`}><Icon name={row.icon} /></span><span><b>{row.name}</b><small>{row.type} <i>·</i> {row.project}</small></span></span>
-                    <span className="secret-value"><span className="secret-mask">••••••••••••••••</span><span className="secret-real">{row.sample}</span></span>
-                    <span className="secret-updated">{row.updated}</span>
-                    <span className="row-more">···</span>
+                  <div className={`pv-row ${state}`} key={row.name}>
+                    <span className="pv-name"><b>{row.name}</b><small>{row.type}</small></span>
+                    <span><span className="vt-env" data-env={row.env}>{row.envLabel}</span></span>
+                    <span className="pv-value"><span className="pv-mask">••••••••••••</span><span className="pv-real">{row.sample}</span></span>
                   </div>
                 );
               })}
             </div>
-            <div className="vault-footer"><span><span className="tiny-lock">⌑</span> Values are hidden by default</span><span>{q ? `${matchCount} of 12` : "12 items"} <b>·</b> Updated just now</span></div>
+            <p className="pv-foot">Sample data. Values stay hidden until you reveal them.</p>
           </div>
         </div>
       </div>
-      <div className="preview-note"><span className="note-spark">✳</span><span><b>A little less hunting.</b><br />A lot more making.</span><span className="note-arrow">↗</span></div>
     </div>
   );
 }
