@@ -111,6 +111,16 @@ const sections: { id: string; title: string; body: React.ReactNode }[] = [
           That protects you if the database is leaked or copied, but not if the server itself is compromised. Turn on two-factor
           authentication and “Protect secret values” to add a check before values are shown.
         </Callout>
+        <Callout title="Automated security tests">
+          Our own test suite checks these protections against a running server. It confirms that signed-out requests are refused, that requests from
+          other sites are rejected, that one user can’t reach another’s secrets, that values and password hashes never appear in responses or logs, that
+          the database holds only ciphertext, that sign-in guessing is locked out, and that hostile input gets a clean error.
+        </Callout>
+        <Callout tone="warn" title="Not independently reviewed yet">
+          Those tests are written and run by us, so they are not an independent review. Dotkeep has not had an external security review or penetration
+          test, and the protections above describe how it is built, not a certified result. Think carefully before storing secrets whose loss would be
+          severe. To report a vulnerability, email the address on the Privacy Policy page.
+        </Callout>
         <Callout title="Keep the encryption key backed up">
           Whoever runs the Dotkeep server sets the <code>VAULT_ENCRYPTION_KEY</code>. If it is lost, every stored secret and every
           two-factor secret becomes unreadable, and nobody can recover them.
