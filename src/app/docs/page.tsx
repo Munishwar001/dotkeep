@@ -322,6 +322,7 @@ export default function DocsPage() {
           </div>
         </div>
       </main>
+      <footer className="docs-foot section-shell">© 2026 Dotkeep <span>·</span> <Link href="/privacy">Privacy Policy</Link> <span>·</span> <Link href="/terms">Terms of Service</Link></footer>
     </>
   );
 }
