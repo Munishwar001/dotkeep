@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import { isGoogleConfigured } from "@/lib/google-oauth";
 import { AuthForm } from "@/modules/auth/auth-form";
@@ -19,6 +20,7 @@ export default function SignupPage() {
       </Suspense>
       {isGoogleConfigured() && <GoogleButton label="Sign up with Google" />}
       <AuthForm mode="signup" />
+      <p className="legal-consent">By creating an account you agree to our <Link href="/terms">Terms of Service</Link> and <Link href="/privacy">Privacy Policy</Link>.</p>
     </AuthShell>
   );
 }
