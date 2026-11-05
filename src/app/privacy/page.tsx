@@ -121,6 +121,11 @@ const sections: LegalSection[] = [
           members they invite. You can add two-factor authentication and require a code before values are shown. No system is perfectly secure,
           and we cannot guarantee absolute security, but we take care to reduce risk.
         </p>
+        <p>
+          We run automated security tests ourselves, covering access control, cross-site request protection, sign-in limits and leaks of secret values.
+          Dotkeep has not yet had an independent security review or penetration test, and we make no claim of security certification. Please weigh that
+          when deciding what to store. If you find a vulnerability, email <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> and we will respond and fix it.
+        </p>
         <p>If we learn of a breach affecting your data, we will tell you without undue delay.</p>
       </>
     ),

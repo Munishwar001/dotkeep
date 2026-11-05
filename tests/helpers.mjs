@@ -95,8 +95,9 @@ export async function createWorld() {
         createdAt: new Date(),
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
       });
-      const call = client(`${SESSION_COOKIE}=${token}`);
-      return { ...person, call, page: (path) => fetchPage(call, path) };
+      const cookie = `${SESSION_COOKIE}=${token}`;
+      const call = client(cookie);
+      return { ...person, cookie, call, page: (path) => fetchPage(call, path) };
     },
 
     /** A real account made through the signup API, so it can use /api/auth/login. Not signed in yet. */
