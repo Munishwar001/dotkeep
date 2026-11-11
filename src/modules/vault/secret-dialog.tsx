@@ -11,11 +11,13 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea";
 import type { Role } from "@/db/access";
 import type { PublicSecret } from "@/db/secrets";
+import { newObjectIdHex } from "@/lib/e2ee";
+import { e2eeStatus, sealValue, UnlockCancelledError } from "@/modules/e2ee/vault-key";
 import { api } from "./client-api";
 import { ENVIRONMENTS, LIMITS, SECRET_TYPES, type Environment, type SecretType } from "./constants";
 
 /** A project the user can open. `role` decides what they may do there; `ownerId` limits where a secret can move. */
-export type ProjectOption = { id: string; name: string; role: Role; ownerId: string };
+export type ProjectOption = { id: string; name: string; role: Role; ownerId: string; memberCount?: number };
 
 export const canWriteTo = (project: ProjectOption | undefined) => project !== undefined && project.role !== "viewer";
 
@@ -69,6 +71,29 @@ function SecretForm({ projects: allProjects, defaultProjectId, secret, prefill, 
 
     setPending(true);
     setError(null);
+
+    // End-to-end: for an account that uses it, a value in a project that is not shared is encrypted here, in the browser, and the
+    // server only ever receives ciphertext. Shared projects keep server-side encryption so teammates can read them.
+    const status = await e2eeStatus();
+    const target = allProjects.find((project) => project.id === projectId);
+    const endToEnd = status.enabled && target?.ownerId === status.userId && !target.memberCount;
+    if (secret && value && endToEnd && !secret.e2ee) {
+      setError("Encrypt your existing secrets first, in Settings → End-to-end encryption. Then you can change this value.");
+      setPending(false);
+      return;
+    }
+    let sealed: { id: string; cipher: string } | null = null;
+    try {
+      if (value && endToEnd) {
+        const id = secret?.id ?? newObjectIdHex(); // the id is part of what protects the ciphertext, so the browser picks it
+        sealed = { id, cipher: await sealValue(id, value) };
+      }
+    } catch (failure) {
+      setError(failure instanceof UnlockCancelledError ? "Unlock your vault to save an end-to-end encrypted secret." : failure instanceof Error ? failure.message : "Couldn’t encrypt the value.");
+      setPending(false);
+      return;
+    }
+
     const result = secret
       ? await api("PATCH", `/api/vault/secrets/${secret.id}`, {
           name,
@@ -76,9 +101,9 @@ function SecretForm({ projects: allProjects, defaultProjectId, secret, prefill, 
           type,
           description,
           ...(projectId !== secret.projectId ? { projectId } : {}), // a different project = move the secret there
-          ...(value ? { value } : {}), // blank = keep the stored value
+          ...(sealed ? { cipher: sealed.cipher } : value ? { value } : {}), // blank = keep the stored value
         })
-      : await api("POST", "/api/vault/secrets", { projectId, name, environment, type, description, value });
+      : await api("POST", "/api/vault/secrets", { projectId, name, environment, type, description, ...(sealed ? sealed : { value }) });
     if (!result.ok) {
       setError(result.error);
       setPending(false);

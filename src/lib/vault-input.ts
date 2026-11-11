@@ -1,4 +1,5 @@
 /** Server-side checks for project and secret data. The forms check too, but the server never trusts the browser. */
+import { E2EE_VALUE_PATTERN } from "./e2ee";
 import { ENVIRONMENTS, LIMITS, SECRET_TYPES, TRANSFER_FORMATS, type Environment, type SecretType, type TransferFormat } from "@/modules/vault/constants";
 
 type Result<T> = { ok: true; data: T } | { ok: false; error: string };
@@ -26,6 +27,16 @@ function checkValue(value: unknown): { ok: true; value: string } | { ok: false; 
   return { ok: true, value: text }; // not trimmed: a secret may legitimately contain spaces or newlines
 }
 
+/** An end-to-end value arrives already encrypted ("e1$..."). The server can only check its shape and size, it can't open it. */
+function checkCipher(value: unknown): { ok: true; cipher: string } | { ok: false; error: string } {
+  const text = asString(value);
+  if (text === undefined || !E2EE_VALUE_PATTERN.test(text) || text.length > MAX_CIPHER) return fail("That encrypted value isn’t valid.");
+  return { ok: true, cipher: text };
+}
+
+/** About 4 bytes per character in the worst case, as base64, plus the IV and tag. */
+const MAX_CIPHER = Math.ceil((LIMITS.secretValue * 4 + 64) / 3) * 4 + 32;
+
 function checkSecretDescription(value: unknown): { ok: true; description: string } | { ok: false; error: string } {
   const description = (asString(value) ?? "").trim();
   if (description.length > LIMITS.secretDescription) return fail(`The notes must be at most ${LIMITS.secretDescription} characters.`);
@@ -49,8 +60,7 @@ export function parseSecretCreate(body: unknown): Result<{
   environment: Environment;
   type: SecretType;
   description: string;
-  value: string;
-}> {
+} & ({ value: string; cipher?: undefined; id?: undefined } | { cipher: string; id: string; value?: undefined })> {
   const input = asObject(body);
   const projectId = asString(input.projectId) ?? "";
   if (!projectId) return fail("Choose a project.");
@@ -62,17 +72,26 @@ export function parseSecretCreate(body: unknown): Result<{
   if (!type) return fail("Choose a type.");
   const description = checkSecretDescription(input.description);
   if (!description.ok) return description;
+  const base = { projectId, name: name.name, environment, type, description: description.description };
+  if (input.cipher !== undefined) {
+    const cipher = checkCipher(input.cipher);
+    if (!cipher.ok) return cipher;
+    const id = asString(input.id) ?? "";
+    if (!/^[0-9a-f]{24}$/i.test(id)) return fail("That encrypted value isn’t valid.");
+    return { ok: true, data: { ...base, cipher: cipher.cipher, id } };
+  }
   const value = checkValue(input.value);
   if (!value.ok) return value;
-  return { ok: true, data: { projectId, name: name.name, environment, type, description: description.description, value: value.value } };
+  return { ok: true, data: { ...base, value: value.value } };
 }
 
 /** Only the fields that are present are changed. Leave `value` out to keep the stored value. */
 export function parseSecretUpdate(
   body: unknown,
-): Result<{ name?: string; environment?: Environment; type?: SecretType; description?: string; value?: string; projectId?: string }> {
+): Result<{ name?: string; environment?: Environment; type?: SecretType; description?: string; value?: string; cipher?: string; projectId?: string }> {
   const input = asObject(body);
-  const data: { name?: string; environment?: Environment; type?: SecretType; description?: string; value?: string; projectId?: string } = {};
+  const data: { name?: string; environment?: Environment; type?: SecretType; description?: string; value?: string; cipher?: string; projectId?: string } = {};
+  if ("value" in input && "cipher" in input) return fail("Send either a value or an encrypted value, not both.");
 
   if ("projectId" in input) {
     const projectId = asString(input.projectId);
@@ -103,6 +122,11 @@ export function parseSecretUpdate(
     const value = checkValue(input.value);
     if (!value.ok) return value;
     data.value = value.value;
+  }
+  if ("cipher" in input) {
+    const cipher = checkCipher(input.cipher);
+    if (!cipher.ok) return cipher;
+    data.cipher = cipher.cipher;
   }
   return Object.keys(data).length ? { ok: true, data } : fail("Nothing to update.");
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { openValue } from "@/modules/e2ee/vault-key";
 import { api } from "./client-api";
 
 /**
@@ -32,13 +33,21 @@ export function useReveal(revealSeconds: number) {
   const fetchValue = useCallback(async (id: string): Promise<string | null> => {
     setBusyId(id);
     setError(null);
-    const result = await api<{ value: string }>("POST", `/api/vault/secrets/${id}/reveal`);
-    setBusyId(null);
+    const result = await api<{ value?: string; cipher?: string }>("POST", `/api/vault/secrets/${id}/reveal`);
     if (!result.ok) {
+      setBusyId(null);
       setError(result.error);
       return null;
     }
-    return result.data.value;
+    try {
+      // An end-to-end secret comes back encrypted: it is opened here, in the browser, with the vault key.
+      return result.data.cipher !== undefined ? await openValue(id, result.data.cipher) : (result.data.value ?? "");
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Couldn’t decrypt this value.");
+      return null;
+    } finally {
+      setBusyId(null);
+    }
   }, []);
 
   const toggleReveal = useCallback(

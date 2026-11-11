@@ -5,8 +5,9 @@
  */
 import { ObjectId } from "mongodb";
 import { collections, type MemberRole } from "./collections";
-import { isDuplicateKeyError, LimitError, NotFoundError } from "./errors";
+import { E2eeError, isDuplicateKeyError, LimitError, NotFoundError } from "./errors";
 import { findUserByEmail, isEmailVerified, usersCollection } from "./users";
+import { projectHasE2eeSecrets } from "./vault-keys";
 
 export const MAX_MEMBERS = 20;
 
@@ -39,6 +40,10 @@ export async function addMember(ownerId: ObjectId, projectId: ObjectId, input: {
     throw new NotFoundError("There is no Dotkeep account with that email. Ask them to sign up and verify their email first.");
   }
   if (person._id.equals(ownerId)) throw new LimitError("You already own this project.");
+  // End-to-end secrets can be opened only with the owner's vault key, so a member would see secrets they can't read.
+  if (await projectHasE2eeSecrets(projectId)) {
+    throw new E2eeError("This project has end-to-end encrypted secrets, so it can’t be shared yet. Move them to another project first.", "e2ee_unavailable");
+  }
 
   const existing = await members.findOne({ projectId, userId: person._id }, { projection: { _id: 1 } });
   if (!existing && (await members.countDocuments({ projectId })) >= MAX_MEMBERS) {

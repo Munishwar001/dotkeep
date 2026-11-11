@@ -6,6 +6,7 @@ import { requireUser } from "@/modules/dashboard/data";
 import { DashboardFrame } from "@/modules/dashboard/frame";
 import { Topbar } from "@/modules/dashboard/overview";
 import { PageHeader } from "@/modules/dashboard/page-header";
+import { E2eeForm } from "@/modules/settings/e2ee-form";
 import { DeleteAccount } from "@/modules/settings/delete-account";
 import { PasswordForm } from "@/modules/settings/password-form";
 import { PreferencesForm } from "@/modules/settings/preferences-form";
@@ -57,13 +58,16 @@ async function SettingsContent() {
           <Section id="secrets-lock" index={3} title="Protect secret values" text="Ask for a code from your authenticator app before a secret is revealed, copied or exported. Good for a shared computer.">
             <SecretsLockForm twoFactorEnabled={user.twoFactorEnabled} enabled={user.secretsNeedCode} />
           </Section>
-          <Section id="vault" index={4} title="Vault" text="How the vault behaves for you.">
+          <Section id="e2ee" index={4} title="End-to-end encryption" text="Encrypt secret values in your browser with a passphrase only you know, so the server can’t read them.">
+            <E2eeForm enabled={user.e2eeEnabled} />
+          </Section>
+          <Section id="vault" index={5} title="Vault" text="How the vault behaves for you.">
             <PreferencesForm revealSeconds={user.revealSeconds} />
           </Section>
-          <Section id="sessions" index={5} wide title="Where you’re signed in" text="Sign out any device you don’t recognize. Sessions last 7 days.">
+          <Section id="sessions" index={6} wide title="Where you’re signed in" text="Sign out any device you don’t recognize. Sessions last 7 days.">
             <SessionsList sessions={sessions} />
           </Section>
-          <Section id="danger" index={6} danger title="Delete account" text="Permanently deletes your account, projects, secrets and sessions. This can’t be undone.">
+          <Section id="danger" index={7} danger title="Delete account" text="Permanently deletes your account, projects, secrets and sessions. This can’t be undone.">
             <DeleteAccount />
           </Section>
         </div>

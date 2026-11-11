@@ -10,12 +10,14 @@
  * the version history (up to LIMITS.versions per secret).
  */
 import { ObjectId } from "mongodb";
+import { isE2eeValue } from "@/lib/e2ee";
 import { decryptSecret, encryptSecret } from "@/lib/vault-crypto";
 import { LIMITS, environmentLabel, secretTypeLabel, type Environment, type SecretType } from "@/modules/vault/constants";
 import { accessibleProjectIds, type Actor } from "./access";
 import { collections, keyOf, type AuditAction, type SecretDoc } from "./collections";
-import { isDuplicateKeyError, LimitError, NameTakenError, NotFoundError } from "./errors";
+import { E2eeError, isDuplicateKeyError, LimitError, NameTakenError, NotFoundError } from "./errors";
 import { logEvent, logEvents, type EventInput } from "./secret-events";
+import { projectIsShared, userHasE2ee } from "./vault-keys";
 
 export type PublicSecret = {
   id: string;
@@ -24,6 +26,8 @@ export type PublicSecret = {
   environment: Environment;
   type: SecretType;
   description: string;
+  /** True when the value is end-to-end encrypted: only the owner's browser can read it. */
+  e2ee: boolean;
   createdAt: string;
   updatedAt: string;
 };
@@ -35,6 +39,7 @@ const toPublic = (doc: SecretDoc): PublicSecret => ({
   environment: doc.environment,
   type: doc.type,
   description: doc.description ?? "",
+  e2ee: isE2eeValue(doc.valueEncrypted),
   createdAt: doc.createdAt.toISOString(),
   updatedAt: doc.updatedAt.toISOString(),
 });
@@ -53,6 +58,24 @@ export const eventOf = (doc: Pick<SecretDoc, "_id" | "name" | "environment" | "p
 });
 
 const TAKEN = "That project already has a secret with this name in this environment.";
+
+/**
+ * Which kind of value may be stored in a project.
+ *  - "cipher" (already encrypted in the browser, "e1$..."): only the owner, only after turning end-to-end encryption on, and only in a
+ *    project that is not shared. A member has no vault key, so a secret they can't read must never appear in their project.
+ *  - "plain" (the server encrypts it): not allowed for an end-to-end user in an unshared project. Otherwise a stale or hostile client
+ *    could hand the server a plaintext value and quietly undo the protection. Shared projects keep server-side encryption.
+ */
+async function checkStorage(owner: ObjectId, actor: Actor, projectId: ObjectId, kind: "cipher" | "plain") {
+  const [enabled, shared] = await Promise.all([userHasE2ee(owner), projectIsShared(projectId)]);
+  if (kind === "cipher") {
+    if (!enabled) throw new E2eeError("Turn on end-to-end encryption in Settings first.", "e2ee_unavailable");
+    if (shared) throw new E2eeError("This project is shared, so its secrets can’t be end-to-end encrypted yet.", "e2ee_unavailable");
+    if (!actor.id.equals(owner)) throw new E2eeError("Only the owner can store an end-to-end encrypted value.", "e2ee_unavailable");
+  } else if (enabled && !shared) {
+    throw new E2eeError("Your account uses end-to-end encryption, so this value has to be encrypted in your browser first.", "e2ee_required");
+  }
+}
 
 /** The secrets of every project the user can open (their own and shared ones), or of one of them. */
 export async function listSecrets(actorId: ObjectId, filter: { projectId?: ObjectId } = {}): Promise<PublicSecret[]> {
@@ -77,7 +100,11 @@ export async function usedEnvironments(actorId: ObjectId): Promise<string[]> {
 export async function createSecret(
   userId: ObjectId,
   actor: Actor,
-  input: { projectId: ObjectId; name: string; environment: Environment; type: SecretType; value: string; description?: string },
+  input: { projectId: ObjectId; name: string; environment: Environment; type: SecretType; description?: string } & (
+    | { value: string; cipher?: undefined; id?: undefined }
+    // An end-to-end value is encrypted in the browser, and its id is part of what protects it, so the browser picks the id too.
+    | { cipher: string; id: ObjectId; value?: undefined }
+  ),
   options: { action?: AuditAction; detail?: string } = {},
 ): Promise<PublicSecret | null> {
   const { projects, secrets } = await collections();
@@ -85,8 +112,10 @@ export async function createSecret(
   if ((await secrets.countDocuments({ userId })) >= LIMITS.secrets) {
     throw new LimitError(`You can store up to ${LIMITS.secrets} secrets.`);
   }
+  await checkStorage(userId, actor, input.projectId, input.cipher !== undefined ? "cipher" : "plain");
 
-  const _id = new ObjectId(); // made up front: the id is part of what protects the ciphertext
+  const _id = input.id ?? new ObjectId(); // made up front: the id is part of what protects the ciphertext
+  if (input.id && (await secrets.findOne({ _id }, { projection: { _id: 1 } }))) throw new NameTakenError("Something went wrong saving this secret. Please try again.");
   const now = new Date();
   const doc: SecretDoc = {
     _id,
@@ -97,7 +126,7 @@ export async function createSecret(
     environment: input.environment,
     type: input.type,
     description: input.description ?? "",
-    valueEncrypted: encryptSecret(input.value, contextOf(userId, _id)),
+    valueEncrypted: input.cipher ?? encryptSecret(input.value, contextOf(userId, _id)),
     createdAt: now,
     updatedAt: now,
   };
@@ -113,7 +142,8 @@ export async function createSecret(
   return toPublic(doc);
 }
 
-export type Patch = { name?: string; environment?: Environment; type?: SecretType; description?: string; value?: string; projectId?: ObjectId };
+/** `value` is encrypted by the server; `cipher` was already encrypted in the browser (end-to-end). Pass at most one of them. */
+export type Patch = { name?: string; environment?: Environment; type?: SecretType; description?: string; value?: string; cipher?: string; projectId?: ObjectId };
 
 /**
  * Only the fields you pass are changed. Leave `value` out to keep the stored value. Returns null if the secret
@@ -134,6 +164,24 @@ export async function updateSecret(
   if (patch.type !== undefined) changes.type = patch.type;
   if (patch.description !== undefined) changes.description = patch.description;
   if (patch.value !== undefined) changes.valueEncrypted = encryptSecret(patch.value, contextOf(userId, secretId));
+  if (patch.cipher !== undefined) changes.valueEncrypted = patch.cipher;
+
+  if (patch.value !== undefined || patch.cipher !== undefined || patch.projectId) {
+    const current = await secrets.findOne({ _id: secretId, userId }, { projection: { valueEncrypted: 1, projectId: 1 } });
+    if (!current) return null;
+    const endToEnd = isE2eeValue(current.valueEncrypted);
+    const destination = patch.projectId ?? current.projectId;
+    if (patch.cipher !== undefined) {
+      // A server-encrypted secret has server-readable history, so it goes through the migration (which re-encrypts that too).
+      if (!endToEnd) throw new E2eeError("Encrypt your existing secrets first, in Settings → End-to-end encryption.", "e2ee_migrate_first");
+      await checkStorage(userId, actor, destination, "cipher");
+    } else if (patch.value !== undefined) {
+      if (endToEnd) throw new E2eeError("This secret is end-to-end encrypted, so its new value has to be encrypted in your browser first.", "e2ee_required");
+      await checkStorage(userId, actor, destination, "plain");
+    } else if (endToEnd && (await projectIsShared(destination))) {
+      throw new E2eeError("An end-to-end encrypted secret can’t be moved into a shared project.", "e2ee_unavailable");
+    }
+  }
 
   let target: { _id: ObjectId; name: string } | null = null;
   if (patch.projectId) {
@@ -169,7 +217,7 @@ export async function updateSecret(
     await projects.updateMany({ _id: { $in: [before.projectId, target._id] }, userId }, { $set: { updatedAt: when } });
   }
 
-  if (patch.value !== undefined) {
+  if (patch.value !== undefined || patch.cipher !== undefined) {
     await versions.insertOne({ _id: new ObjectId(), userId, secretId, valueEncrypted: before.valueEncrypted, createdAt: when });
     const stale = await versions.find({ userId, secretId }, { projection: { _id: 1 } }).sort({ createdAt: -1, _id: -1 }).skip(LIMITS.versions).toArray();
     if (stale.length) await versions.deleteMany({ userId, secretId, _id: { $in: stale.map((v) => v._id) } });
@@ -196,7 +244,7 @@ export async function bulkUpdateSecrets(
     try {
       if (await updateSecret(userId, actor, doc._id, patch)) result.updated += 1;
     } catch (error) {
-      if (!(error instanceof NameTakenError)) throw error; // anything else (e.g. wrong target project) applies to all of them
+      if (!(error instanceof NameTakenError || error instanceof E2eeError)) throw error; // anything else (e.g. wrong target project) applies to all of them
       result.failed.push({ id: doc._id.toString(), name: doc.name, error: error.message });
     }
   }
@@ -219,12 +267,20 @@ export async function deleteSecrets(userId: ObjectId, actor: Actor, ids: ObjectI
   return deletedCount;
 }
 
+/** A revealed value: the plain text, or (end-to-end) the ciphertext for the browser to open with the vault key. */
+export type Revealed = { value: string } | { cipher: string };
+
 /** The only place the CURRENT stored value is decrypted. Returns null when the secret doesn't exist (or isn't yours). */
-export async function revealSecret(userId: ObjectId, actor: Actor, secretId: ObjectId): Promise<string | null> {
+export async function revealSecret(userId: ObjectId, actor: Actor, secretId: ObjectId): Promise<Revealed | null> {
   const { secrets } = await collections();
   const doc = await secrets.findOne({ _id: secretId, userId });
   if (!doc) return null;
-  const value = decryptSecret(doc.valueEncrypted, contextOf(userId, secretId));
+  const revealed = revealStored(doc.valueEncrypted, userId, secretId);
   await logEvent(userId, eventOf(doc, actor, "revealed"));
-  return value;
+  return revealed;
+}
+
+/** Server-encrypted values are decrypted here; end-to-end values are handed over still encrypted, the server can't open them. */
+export function revealStored(stored: string, userId: ObjectId, secretId: ObjectId): Revealed {
+  return isE2eeValue(stored) ? { cipher: stored } : { value: decryptSecret(stored, contextOf(userId, secretId)) };
 }

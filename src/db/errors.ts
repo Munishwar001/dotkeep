@@ -21,6 +21,17 @@ export class NotFoundError extends Error {
   }
 }
 
+/** Something the end-to-end encryption rules don't allow. `code` tells the browser what to do about it. */
+export class E2eeError extends Error {
+  constructor(
+    message: string,
+    readonly code: "e2ee_required" | "e2ee_unavailable" | "e2ee_migrate_first",
+  ) {
+    super(message);
+    this.name = "E2eeError";
+  }
+}
+
 export function isDuplicateKeyError(error: unknown) {
   return typeof error === "object" && error !== null && "code" in error && error.code === 11000;
 }

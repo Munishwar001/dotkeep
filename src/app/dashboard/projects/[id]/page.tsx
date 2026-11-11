@@ -62,7 +62,7 @@ async function ProjectContent({ params }: { params: Promise<{ id: string }> }) {
             Shared with you by <b>{project.ownerName}</b>. You can {project.role === "editor" ? "view and change secrets here" : "view secrets here, but not change them"}.
           </p>
         )}
-        <SecretsTable secrets={secrets} projects={projects.map(({ id, name, role, ownerId }) => ({ id, name, role, ownerId }))} fixedProjectId={project.id} revealSeconds={user.revealSeconds} />
+        <SecretsTable secrets={secrets} projects={projects.map(({ id, name, role, ownerId, memberCount }) => ({ id, name, role, ownerId, memberCount }))} fixedProjectId={project.id} revealSeconds={user.revealSeconds} />
       </main>
     </>
   );

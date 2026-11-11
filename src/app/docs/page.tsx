@@ -106,10 +106,10 @@ const sections: { id: string; title: string; body: React.ReactNode }[] = [
             ["Abuse limits", "Reveal, export and sign-in attempts are rate limited."],
           ]}
         />
-        <Callout tone="warn" title="This is not end-to-end encryption">
-          Dotkeep encrypts values on the server with a key the server holds, so the server can decrypt them when you reveal one.
-          That protects you if the database is leaked or copied, but not if the server itself is compromised. Turn on two-factor
-          authentication and “Protect secret values” to add a check before values are shown.
+        <Callout tone="warn" title="Server-side encryption is the default, end-to-end is opt-in">
+          By default Dotkeep encrypts values on the server with a key the server holds, so the server can decrypt them when you reveal one.
+          That protects you if the database is leaked or copied, but not if the server itself is compromised. For the strongest protection, turn on
+          <strong> end-to-end encryption</strong> in Settings (see below). Two-factor authentication and “Protect secret values” add a check before values are shown.
         </Callout>
         <Callout title="Automated security tests">
           Our own test suite checks these protections against a running server. It confirms that signed-out requests are refused, that requests from
@@ -124,6 +124,42 @@ const sections: { id: string; title: string; body: React.ReactNode }[] = [
         <Callout title="Keep the encryption key backed up">
           Whoever runs the Dotkeep server sets the <code>VAULT_ENCRYPTION_KEY</code>. If it is lost, every stored secret and every
           two-factor secret becomes unreadable, and nobody can recover them.
+        </Callout>
+      </>
+    ),
+  },
+  {
+    id: "end-to-end",
+    title: "End-to-end encryption",
+    body: (
+      <>
+        <p>
+          When you turn on end-to-end encryption in Settings, your browser makes a <strong>vault key</strong> and encrypts each secret value with it before
+          anything is sent. The server stores only ciphertext and a copy of the vault key that is locked by your <strong>vault passphrase</strong> and by a
+          <strong> recovery key</strong>. It never receives your passphrase, your recovery key or the vault key, so it cannot read your values, even if the server
+          or the database is compromised.
+        </p>
+        <Table
+          head={["Topic", "How it works"]}
+          rows={[
+            ["Passphrase", "Separate from your login password, at least 12 characters. It is asked for once per page load, to unlock the vault in that tab. It never leaves your browser."],
+            ["Recovery key", "Shown once when you turn it on. If you forget the passphrase, the recovery key lets you choose a new one. Keep it somewhere safe, away from this browser."],
+            ["Existing secrets", "“Encrypt existing secrets” in Settings moves secrets you saved before, version history included, to end-to-end encryption."],
+            ["Reveal, copy, history, export", "Work as before. The server hands over ciphertext and your browser opens it. Exports and backups include end-to-end secrets in plain text, like any export."],
+          ]}
+        />
+        <h3>What it does not cover</h3>
+        <ul>
+          <li><strong>Lose both, lose the data.</strong> If you lose the passphrase and the recovery key, nobody, including us, can recover your secrets.</li>
+          <li><strong>Shared projects keep server-side encryption.</strong> A teammate has no key to your vault, so a project with end-to-end secrets can’t be shared yet, and an end-to-end secret can’t be moved into a shared project.</li>
+          <li><strong>Importing a .env file and restoring a backup are not available</strong> while it is on, because they would show the server the values. Export still works.</li>
+          <li><strong>Names, environments, types and notes are not encrypted.</strong> Only values are. The activity log records that a secret was viewed, never its value.</li>
+          <li><strong>The web app has to trust the page it loads.</strong> Your browser runs the encryption code that Dotkeep’s server sends, so a compromised server could send altered code. A command-line tool or browser extension would close that gap, and neither exists yet.</li>
+          <li><strong>It can’t be turned off yet.</strong></li>
+          <li>Your passphrase protects your keys against someone who copies them, so choose a long one. Short ones can be guessed offline.</li>
+        </ul>
+        <Callout tone="warn" title="Not independently reviewed">
+          The encryption is built on the browser’s standard cryptography (AES-256-GCM, PBKDF2-SHA256), but this design has not been reviewed by an outside security expert.
         </Callout>
       </>
     ),
@@ -218,6 +254,7 @@ const sections: { id: string; title: string; body: React.ReactNode }[] = [
             [<strong key="v">Vault</strong>, "Choose how long a revealed secret stays visible: 5, 15 (default), 30 or 60 seconds. It saves as soon as you pick."],
             [<strong key="s">Where you’re signed in</strong>, "See your active sessions, sign out a single device, or choose “Sign out everywhere else”."],
             [<strong key="t">Two-factor authentication</strong>, "Add a second step to sign-in. See below."],
+            [<strong key="e2ee">End-to-end encryption</strong>, "Encrypt values in your browser with a passphrase only you know. See “End-to-end encryption” above."],
             [<strong key="l">Protect secret values</strong>, "Ask for a code before values are shown. See below."],
             [<strong key="d">Delete account</strong>, "Permanently deletes your account, projects, secrets and history. Needs your password and can’t be undone."],
           ]}

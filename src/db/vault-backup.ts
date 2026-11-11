@@ -6,6 +6,7 @@
  * (same name + environment: skipped, or replaced when `overwrite` is on), all through importEntries().
  */
 import { ObjectId } from "mongodb";
+import { isE2eeValue } from "@/lib/e2ee";
 import { decryptSecret } from "@/lib/vault-crypto";
 import type { BackupProject } from "@/lib/vault-json";
 import { LIMITS, type Environment, type SecretType } from "@/modules/vault/constants";
@@ -17,7 +18,10 @@ import { emptyResult, importEntries, type ImportResult } from "./secret-import";
 import { logEvents } from "./secret-events";
 import { contextOf, eventOf } from "./secrets";
 
-export async function exportBackup(userId: ObjectId, actor: Actor): Promise<{ projects: BackupProject[]; secretCount: number }> {
+/** An end-to-end secret in a backup: still encrypted, the browser opens it and puts it into its project in the file. */
+export type EncryptedBackupSecret = { projectName: string; id: string; name: string; environment: Environment; type: SecretType; description: string; cipher: string };
+
+export async function exportBackup(userId: ObjectId, actor: Actor): Promise<{ projects: BackupProject[]; encrypted: EncryptedBackupSecret[]; secretCount: number }> {
   const { projects, secrets } = await collections();
   const [projectDocs, secretDocs] = await Promise.all([
     projects.find({ userId }).sort({ nameKey: 1 }).toArray(),
@@ -26,8 +30,15 @@ export async function exportBackup(userId: ObjectId, actor: Actor): Promise<{ pr
 
   const byProject = new Map(projectDocs.map((doc): [string, BackupProject] => [doc._id.toString(), { name: doc.name, description: doc.description, secrets: [] }]));
   const exported = [];
+  const encrypted: EncryptedBackupSecret[] = [];
   for (const doc of secretDocs) {
-    byProject.get(doc.projectId.toString())?.secrets.push({
+    const project = byProject.get(doc.projectId.toString());
+    if (isE2eeValue(doc.valueEncrypted)) {
+      if (project) encrypted.push({ projectName: project.name, id: doc._id.toString(), name: doc.name, environment: doc.environment, type: doc.type, description: doc.description ?? "", cipher: doc.valueEncrypted });
+      exported.push(eventOf(doc, actor, "exported", "to a vault backup"));
+      continue;
+    }
+    project?.secrets.push({
       name: doc.name,
       environment: doc.environment,
       type: doc.type,
@@ -37,7 +48,7 @@ export async function exportBackup(userId: ObjectId, actor: Actor): Promise<{ pr
     exported.push(eventOf(doc, actor, "exported", "to a vault backup"));
   }
   await logEvents(userId, exported);
-  return { projects: [...byProject.values()], secretCount: exported.length };
+  return { projects: [...byProject.values()], encrypted, secretCount: exported.length };
 }
 
 export type BackupImportResult = ImportResult & { projectsCreated: number };

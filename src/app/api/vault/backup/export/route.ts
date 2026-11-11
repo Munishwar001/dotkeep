@@ -25,7 +25,7 @@ export async function POST(request: Request) {
   try {
     const backup = await exportBackup(auth.userId, auth.actor);
     return NextResponse.json(
-      { content: serializeBackup(backup.projects, new Date()), projects: backup.projects.length, secrets: backup.secretCount },
+      { content: serializeBackup(backup.projects, new Date()), projects: backup.projects.length, secrets: backup.secretCount, encrypted: backup.encrypted },
       { headers: noStore },
     );
   } catch (error) {
