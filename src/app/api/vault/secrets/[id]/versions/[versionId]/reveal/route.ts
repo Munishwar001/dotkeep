@@ -31,8 +31,8 @@ export async function POST(request: Request, { params }: Context) {
   try {
     const access = await secretAccess(auth.userId, id);
     if (!access) return apiError("Version not found.", 404);
-    const value = await revealVersion(access.ownerId, auth.actor, id, versionId);
-    return value === null ? apiError("Version not found.", 404) : NextResponse.json({ value }, { headers: noStore });
+    const revealed = await revealVersion(access.ownerId, auth.actor, id, versionId);
+    return revealed === null ? apiError("Version not found.", 404) : NextResponse.json(revealed, { headers: noStore });
   } catch (error) {
     return handleError(error);
   }

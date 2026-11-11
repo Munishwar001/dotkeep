@@ -35,7 +35,10 @@ export async function POST(request: Request) {
     const access = await projectAccess(auth.userId, projectId);
     const denied = requireRole(access, "write", "Project not found.");
     if (denied || !access) return denied!;
-    const secret = await createSecret(access.ownerId, auth.actor, { ...parsed.data, projectId });
+    const { id: rawId, cipher, value, ...rest } = parsed.data;
+    const secretId = rawId ? parseObjectId(rawId) : null;
+    const input = cipher !== undefined && secretId ? { ...rest, projectId, cipher, id: secretId } : { ...rest, projectId, value: value ?? "" };
+    const secret = await createSecret(access.ownerId, auth.actor, input);
     return secret ? NextResponse.json({ secret }, { status: 201, headers: noStore }) : apiError("Project not found.", 404);
   } catch (error) {
     return handleError(error);

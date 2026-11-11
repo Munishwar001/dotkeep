@@ -9,6 +9,7 @@ import { parseExport } from "@/lib/vault-input";
 import { serializeJsonVariables } from "@/lib/vault-json";
 
 // POST /api/vault/export  { projectId, environment, format? }  ->  { content, count, skipped, projectName }
+// End-to-end secrets are returned still encrypted in `encrypted` (the browser opens them and adds them to the file).
 // Decrypts every secret of that project and environment into .env text, or into a JSON object when `format` is "json". It is a POST (same-origin check) and
 // rate limited, because it is the biggest way to take values out. Each exported secret is logged.
 export async function POST(request: Request) {
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     });
     if (!result) return apiError("Project not found.", 404);
     return NextResponse.json(
-      { content: json ? serializeJsonVariables(result.entries) : serializeEnv(result.entries), count: result.entries.length, skipped: result.skipped, projectName: result.projectName },
+      { content: json ? serializeJsonVariables(result.entries) : serializeEnv(result.entries), count: result.entries.length + result.encrypted.length, encrypted: result.encrypted, skipped: result.skipped, projectName: result.projectName },
       { headers: noStore },
     );
   } catch (error) {

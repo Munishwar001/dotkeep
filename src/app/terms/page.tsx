@@ -28,8 +28,9 @@ const sections: LegalSection[] = [
           teammates. Dotkeep is early software. Features may change, and some things are not built yet (see <Link href="/docs#roadmap">what is not available</Link>).
         </p>
         <p>
-          Values are encrypted on the server with a key the server holds. This protects you if the database is copied, but it is not end-to-end
-          encryption. Please read <Link href="/docs#encryption">how your data is protected</Link> and decide whether it fits what you store.
+          By default, values are encrypted on the server with a key the server holds. This protects you if the database is copied, but it is not end-to-end
+          encryption. You can turn on end-to-end encryption in Settings, in which case we cannot read your values and cannot recover them if you lose your
+          passphrase and recovery key. Please read <Link href="/docs#encryption">how your data is protected</Link> and decide whether it fits what you store.
         </p>
       </>
     ),

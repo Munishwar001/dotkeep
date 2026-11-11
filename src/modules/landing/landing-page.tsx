@@ -22,7 +22,7 @@ const steps = [
 
 const faqs = [
   { q: "Is Dotkeep available yet?", a: "Yes. You can create an account, add projects and secrets, and use the vault today. It is still early, so some things are not built yet. The docs list what is missing." },
-  { q: "Does Dotkeep encrypt my secrets?", a: "Yes. Every value is encrypted with AES-256-GCM before it is stored, and values are never shown in lists. It is not end-to-end encryption: the server holds the key, so it can decrypt a value when you reveal it. The docs explain what that does and doesn’t protect against." },
+  { q: "Does Dotkeep encrypt my secrets?", a: "Yes. Every value is encrypted with AES-256-GCM before it is stored, and values are never shown in lists. By default the server holds the key, so it can decrypt a value when you reveal it. You can turn on end-to-end encryption in Settings, so values are encrypted in your browser with a passphrase only you know and the server cannot read them. It has limits, such as shared projects, and the docs explain them." },
   { q: "Can I use Dotkeep with a team?", a: "You can share a project with other Dotkeep users as an editor or a viewer, and every change is recorded in an activity log. Organisation-wide teams are not available yet." },
   { q: "What can I keep in my workspace?", a: "API keys, access tokens, webhook URLs, database URLs and environment variables, grouped by project and by local, staging or production. You can import and export .env and JSON files, and back up the whole vault." },
 ];

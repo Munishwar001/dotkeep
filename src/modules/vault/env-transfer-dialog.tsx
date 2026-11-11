@@ -10,6 +10,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "./client-api";
 import { ENVIRONMENTS, LIMITS, TRANSFER_FORMATS, type Environment, type TransferFormat } from "./constants";
+import { mergeVariables } from "@/modules/e2ee/export-merge";
 import { canWriteTo, type ProjectOption } from "./secret-dialog";
 
 export type TransferMode = "import" | "export";
@@ -84,11 +85,24 @@ function TransferForm({ mode, projects: allProjects, defaultProjectId, defaultEn
       return;
     }
 
-    const result = await api<{ content: string; count: number; skipped: string[]; projectName: string }>("POST", "/api/vault/export", { projectId, environment, format });
+    const result = await api<{ content: string; count: number; skipped: string[]; projectName: string; encrypted?: { id: string; name: string; cipher: string }[] }>("POST", "/api/vault/export", { projectId, environment, format });
+    if (!result.ok) {
+      setPending(false);
+      return setError(result.error);
+    }
+    if (result.data.count === 0) {
+      setPending(false);
+      return setError(format === "json" ? "There are no secrets in that project and environment." : "There are no secrets with valid variable names in that project and environment.");
+    }
+    let file: string;
+    try {
+      file = await mergeVariables(format, result.data.content, result.data.encrypted ?? []); // opens the end-to-end ones, here in the browser
+    } catch (failure) {
+      setPending(false);
+      return setError(failure instanceof Error ? failure.message : "Couldn’t decrypt the end-to-end secrets.");
+    }
     setPending(false);
-    if (!result.ok) return setError(result.error);
-    if (result.data.count === 0) return setError(format === "json" ? "There are no secrets in that project and environment." : "There are no secrets with valid variable names in that project and environment.");
-    download(result.data.content, format === "json" ? `${result.data.projectName}.${environment}.json` : `.env.${environment}`, format === "json" ? "application/json" : "text/plain");
+    download(file, format === "json" ? `${result.data.projectName}.${environment}.json` : `.env.${environment}`, format === "json" ? "application/json" : "text/plain");
     const skipped = result.data.skipped.length ? ` Left out because they aren’t valid variable names: ${result.data.skipped.join(", ")}.` : "";
     setNotice(`Downloaded ${result.data.count} ${result.data.count === 1 ? "variable" : "variables"}. The file holds real values, so keep it safe and don’t commit it.${skipped}`);
     router.refresh(); // the export is now in the activity log
