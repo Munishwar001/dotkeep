@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Inter } from "next/font/google";
+import { SiteAnalytics } from "@/modules/analytics/site-analytics";
 import "./globals.css";
 
 const inter = Inter({
@@ -24,7 +25,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${inter.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        {/* Only the live site is counted, not localhost or the preview deploys of other branches. */}
+        {process.env.VERCEL_ENV === "production" && <SiteAnalytics />}
+      </body>
     </html>
   );
 }

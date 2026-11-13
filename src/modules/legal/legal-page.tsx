@@ -8,7 +8,7 @@ import "@/app/docs/docs.css";
 /** Where privacy and legal questions go. Change it here and both pages follow. */
 export const CONTACT_EMAIL = "legal@dotkeep.com";
 
-export const LAST_UPDATED = "5 November 2026";
+export const LAST_UPDATED = "13 November 2026";
 
 export type LegalSection = { id: string; title: string; body: React.ReactNode };
 
