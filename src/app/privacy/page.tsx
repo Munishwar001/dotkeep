@@ -15,7 +15,7 @@ const sections: LegalSection[] = [
       <ul>
         <li>We collect only what is needed to run your account and your vault: your email, name, password (or Google sign-in) and the secrets you save.</li>
         <li>Secret values are encrypted before they are stored. We never sell your data and never use it for advertising.</li>
-        <li>By default Dotkeep encrypts on the server. You can turn on end-to-end encryption, so the server can’t read your values at all. <Link href="/docs#end-to-end">The docs</Link> explain both, and their limits.</li>
+        <li>By default Dotkeep encrypts on the server. You can turn on end-to-end encryption so values encrypted by your browser cannot be read from the stored ciphertext alone. Previously saved secrets remain server-encrypted until you run “Encrypt existing secrets,” including their history. Secrets in shared projects remain server-encrypted. <Link href="/docs#end-to-end">The docs</Link> explain both, and their limits.</li>
         <li>You can export your data and delete your account at any time, from Settings.</li>
       </ul>
     ),

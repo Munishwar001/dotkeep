@@ -9,7 +9,7 @@
  * Every change is written to the audit log (secret-events.ts). Replacing a value keeps the old one in
  * the version history (up to LIMITS.versions per secret).
  */
-import { ObjectId } from "mongodb";
+import { ObjectId, type ClientSession } from "mongodb";
 import { isE2eeValue } from "@/lib/e2ee";
 import { decryptSecret, encryptSecret } from "@/lib/vault-crypto";
 import { LIMITS, environmentLabel, secretTypeLabel, type Environment, type SecretType } from "@/modules/vault/constants";
@@ -57,6 +57,8 @@ export const eventOf = (doc: Pick<SecretDoc, "_id" | "name" | "environment" | "p
   ...(detail ? { detail } : {}),
 });
 
+import { guardProject, transaction } from "./project-transaction";
+
 const TAKEN = "That project already has a secret with this name in this environment.";
 
 /**
@@ -66,8 +68,9 @@ const TAKEN = "That project already has a secret with this name in this environm
  *  - "plain" (the server encrypts it): not allowed for an end-to-end user in an unshared project. Otherwise a stale or hostile client
  *    could hand the server a plaintext value and quietly undo the protection. Shared projects keep server-side encryption.
  */
-async function checkStorage(owner: ObjectId, actor: Actor, projectId: ObjectId, kind: "cipher" | "plain") {
-  const [enabled, shared] = await Promise.all([userHasE2ee(owner), projectIsShared(projectId)]);
+async function checkStorage(owner: ObjectId, actor: Actor, projectId: ObjectId, kind: "cipher" | "plain", session: ClientSession) {
+  const enabled = await userHasE2ee(owner);
+  const shared = await projectIsShared(projectId, session);
   if (kind === "cipher") {
     if (!enabled) throw new E2eeError("Turn on end-to-end encryption in Settings first.", "e2ee_unavailable");
     if (shared) throw new E2eeError("This project is shared, so its secrets can’t be end-to-end encrypted yet.", "e2ee_unavailable");
@@ -107,15 +110,37 @@ export async function createSecret(
   ),
   options: { action?: AuditAction; detail?: string } = {},
 ): Promise<PublicSecret | null> {
+  let events: EventInput[] = [];
+  const result = await transaction((session) => {
+    events = [];
+    return createSecretInTransaction(userId, actor, input, options, session, events);
+  });
+  await logEvents(userId, events);
+  return result;
+}
+
+async function createSecretInTransaction(
+  userId: ObjectId,
+  actor: Actor,
+  input: { projectId: ObjectId; name: string; environment: Environment; type: SecretType; description?: string } & (
+    | { value: string; cipher?: undefined; id?: undefined }
+    // An end-to-end value is encrypted in the browser, and its id is part of what protects it, so the browser picks the id too.
+    | { cipher: string; id: ObjectId; value?: undefined }
+  ),
+  options: { action?: AuditAction; detail?: string } = {},
+  session: ClientSession,
+  events: EventInput[],
+): Promise<PublicSecret | null> {
   const { projects, secrets } = await collections();
-  if (!(await projects.findOne({ _id: input.projectId, userId }, { projection: { _id: 1 } }))) return null;
-  if ((await secrets.countDocuments({ userId })) >= LIMITS.secrets) {
+  if (!(await projects.findOne({ _id: input.projectId, userId }, { projection: { _id: 1 }, session }))) return null;
+  await guardProject(userId, input.projectId, session);
+  if ((await secrets.countDocuments({ userId }, { session })) >= LIMITS.secrets) {
     throw new LimitError(`You can store up to ${LIMITS.secrets} secrets.`);
   }
-  await checkStorage(userId, actor, input.projectId, input.cipher !== undefined ? "cipher" : "plain");
+  await checkStorage(userId, actor, input.projectId, input.cipher !== undefined ? "cipher" : "plain", session);
 
   const _id = input.id ?? new ObjectId(); // made up front: the id is part of what protects the ciphertext
-  if (input.id && (await secrets.findOne({ _id }, { projection: { _id: 1 } }))) throw new NameTakenError("Something went wrong saving this secret. Please try again.");
+  if (input.id && (await secrets.findOne({ _id }, { projection: { _id: 1 }, session }))) throw new NameTakenError("Something went wrong saving this secret. Please try again.");
   const now = new Date();
   const doc: SecretDoc = {
     _id,
@@ -132,13 +157,13 @@ export async function createSecret(
   };
 
   try {
-    await secrets.insertOne(doc);
+    await secrets.insertOne(doc, { session });
   } catch (error) {
     if (isDuplicateKeyError(error)) throw new NameTakenError(TAKEN);
     throw error;
   }
-  await projects.updateOne({ _id: input.projectId, userId }, { $set: { updatedAt: now } });
-  await logEvent(userId, eventOf(doc, actor, options.action ?? "created", options.detail));
+  await projects.updateOne({ _id: input.projectId, userId }, { $set: { updatedAt: now } }, { session });
+  events.push(eventOf(doc, actor, options.action ?? "created", options.detail));
   return toPublic(doc);
 }
 
@@ -157,7 +182,33 @@ export async function updateSecret(
   patch: Patch,
   options: { valueAction?: "value_changed" | "restored"; detail?: string } = {},
 ): Promise<PublicSecret | null> {
+  let events: EventInput[] = [];
+  const result = await transaction((session) => {
+    events = [];
+    return updateSecretInTransaction(userId, actor, secretId, patch, options, session, events);
+  });
+  await logEvents(userId, events);
+  return result;
+}
+
+async function updateSecretInTransaction(
+  userId: ObjectId,
+  actor: Actor,
+  secretId: ObjectId,
+  patch: Patch,
+  options: { valueAction?: "value_changed" | "restored"; detail?: string } = {},
+  session: ClientSession,
+  events: EventInput[],
+): Promise<PublicSecret | null> {
   const { projects, secrets, versions } = await collections();
+  const initial = await secrets.findOne({ _id: secretId, userId }, { session });
+  if (!initial) return null;
+  if (patch.projectId && !(await projects.findOne({ _id: patch.projectId, userId }, { session, projection: { _id: 1 } }))) {
+    throw new NotFoundError("A secret can only be moved to another project of the same owner.");
+  }
+  for (const projectId of [...new Map([initial.projectId, patch.projectId ?? initial.projectId].map((id) => [id.toString(), id])).values()].sort((a, b) => a.toString().localeCompare(b.toString()))) {
+    await guardProject(userId, projectId, session);
+  }
   const changes: Partial<SecretDoc> = { updatedAt: new Date() };
   if (patch.name !== undefined) Object.assign(changes, { name: patch.name, nameKey: keyOf(patch.name) });
   if (patch.environment !== undefined) changes.environment = patch.environment;
@@ -167,32 +218,32 @@ export async function updateSecret(
   if (patch.cipher !== undefined) changes.valueEncrypted = patch.cipher;
 
   if (patch.value !== undefined || patch.cipher !== undefined || patch.projectId) {
-    const current = await secrets.findOne({ _id: secretId, userId }, { projection: { valueEncrypted: 1, projectId: 1 } });
+    const current = await secrets.findOne({ _id: secretId, userId }, { projection: { valueEncrypted: 1, projectId: 1 }, session });
     if (!current) return null;
     const endToEnd = isE2eeValue(current.valueEncrypted);
     const destination = patch.projectId ?? current.projectId;
     if (patch.cipher !== undefined) {
       // A server-encrypted secret has server-readable history, so it goes through the migration (which re-encrypts that too).
       if (!endToEnd) throw new E2eeError("Encrypt your existing secrets first, in Settings → End-to-end encryption.", "e2ee_migrate_first");
-      await checkStorage(userId, actor, destination, "cipher");
+      await checkStorage(userId, actor, destination, "cipher", session);
     } else if (patch.value !== undefined) {
       if (endToEnd) throw new E2eeError("This secret is end-to-end encrypted, so its new value has to be encrypted in your browser first.", "e2ee_required");
-      await checkStorage(userId, actor, destination, "plain");
-    } else if (endToEnd && (await projectIsShared(destination))) {
-      throw new E2eeError("An end-to-end encrypted secret can’t be moved into a shared project.", "e2ee_unavailable");
+      await checkStorage(userId, actor, destination, "plain", session);
+    } else {
+      await checkStorage(userId, actor, destination, endToEnd ? "cipher" : "plain", session);
     }
   }
 
   let target: { _id: ObjectId; name: string } | null = null;
   if (patch.projectId) {
-    target = await projects.findOne({ _id: patch.projectId, userId }, { projection: { _id: 1, name: 1 } });
+    target = await projects.findOne({ _id: patch.projectId, userId }, { projection: { _id: 1, name: 1 }, session });
     if (!target) throw new NotFoundError("A secret can only be moved to another project of the same owner.");
     changes.projectId = patch.projectId;
   }
 
   let before: SecretDoc | null;
   try {
-    before = await secrets.findOneAndUpdate({ _id: secretId, userId }, { $set: changes }, { returnDocument: "before" });
+    before = await secrets.findOneAndUpdate({ _id: secretId, userId }, { $set: changes }, { returnDocument: "before", session });
   } catch (error) {
     if (isDuplicateKeyError(error)) throw new NameTakenError(TAKEN);
     throw error;
@@ -201,7 +252,6 @@ export async function updateSecret(
   const after: SecretDoc = { ...before, ...changes };
   const when = changes.updatedAt as Date;
 
-  const events: EventInput[] = [];
   const diffs: string[] = [];
   if (patch.name !== undefined && patch.name !== before.name) diffs.push(`name “${before.name}” → “${patch.name}”`);
   if (patch.environment !== undefined && patch.environment !== before.environment) {
@@ -212,19 +262,18 @@ export async function updateSecret(
   if (diffs.length) events.push(eventOf(after, actor, "updated", diffs.join(", ")));
 
   if (target && !target._id.equals(before.projectId)) {
-    const source = await projects.findOne({ _id: before.projectId, userId }, { projection: { name: 1 } });
+    const source = await projects.findOne({ _id: before.projectId, userId }, { projection: { name: 1 }, session });
     events.push(eventOf(after, actor, "moved", `${source?.name ?? "a deleted project"} → ${target.name}`));
-    await projects.updateMany({ _id: { $in: [before.projectId, target._id] }, userId }, { $set: { updatedAt: when } });
+    await projects.updateMany({ _id: { $in: [before.projectId, target._id] }, userId }, { $set: { updatedAt: when } }, { session });
   }
 
   if (patch.value !== undefined || patch.cipher !== undefined) {
-    await versions.insertOne({ _id: new ObjectId(), userId, secretId, valueEncrypted: before.valueEncrypted, createdAt: when });
-    const stale = await versions.find({ userId, secretId }, { projection: { _id: 1 } }).sort({ createdAt: -1, _id: -1 }).skip(LIMITS.versions).toArray();
-    if (stale.length) await versions.deleteMany({ userId, secretId, _id: { $in: stale.map((v) => v._id) } });
+    await versions.insertOne({ _id: new ObjectId(), userId, secretId, valueEncrypted: before.valueEncrypted, createdAt: when }, { session });
+    const stale = await versions.find({ userId, secretId }, { projection: { _id: 1 }, session }).sort({ createdAt: -1, _id: -1 }).skip(LIMITS.versions).toArray();
+    if (stale.length) await versions.deleteMany({ userId, secretId, _id: { $in: stale.map((v) => v._id) } }, { session });
     events.push(eventOf(after, actor, options.valueAction ?? "value_changed", options.detail));
   }
 
-  await logEvents(userId, events);
   return toPublic(after);
 }
 

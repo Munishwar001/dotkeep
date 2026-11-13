@@ -18,6 +18,8 @@ import { registerUnlock, setUnlocked } from "./vault-key";
  */
 export function UnlockDialog() {
   const [open, setOpen] = useState(false);
+  const [requestId, setRequestId] = useState(0);
+  const generation = useRef(0);
   const pending = useRef<{ promise: Promise<boolean>; resolve: (ok: boolean) => void } | null>(null);
 
   useEffect(() => {
@@ -26,14 +28,20 @@ export function UnlockDialog() {
         let resolve!: (ok: boolean) => void;
         const promise = new Promise<boolean>((r) => (resolve = r));
         pending.current = { promise, resolve };
+        setRequestId(++generation.current);
         setOpen(true);
       }
       return pending.current.promise;
     });
-    return () => registerUnlock(null);
+    return () => {
+      pending.current?.resolve(false);
+      pending.current = null;
+      registerUnlock(null);
+    };
   }, []);
 
   function finish(ok: boolean) {
+    generation.current++;
     pending.current?.resolve(ok);
     pending.current = null;
     setOpen(false);
@@ -43,7 +51,7 @@ export function UnlockDialog() {
     <Dialog open={open} onOpenChange={(next) => !next && finish(false)}>
       <DialogContent className="sm:max-w-md">
         {/* Created fresh each time it opens, so a typed passphrase never lingers. */}
-        <UnlockForm onDone={finish} />
+        <UnlockForm key={requestId} isCurrent={() => pending.current !== null && generation.current === requestId} onDone={(ok) => { if (generation.current === requestId) finish(ok); }} />
       </DialogContent>
     </Dialog>
   );
@@ -51,7 +59,7 @@ export function UnlockDialog() {
 
 type Keys = { userId: string; record: VaultKeyRecord };
 
-function UnlockForm({ onDone }: { onDone: (ok: boolean) => void }) {
+function UnlockForm({ onDone, isCurrent }: { onDone: (ok: boolean) => void; isCurrent: () => boolean }) {
   const [keys, setKeys] = useState<Keys | null>(null);
   const [forgot, setForgot] = useState(false);
   const [passphrase, setPassphrase] = useState("");
@@ -73,7 +81,7 @@ function UnlockForm({ onDone }: { onDone: (ok: boolean) => void }) {
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (busy || !keys) return;
+    if (busy || !keys || !isCurrent()) return;
     if (!passphrase) return setError(forgot ? "Choose a new passphrase." : "Enter your passphrase.");
     if (forgot && !recoveryKey.trim()) return setError("Enter your recovery key.");
 
@@ -83,14 +91,19 @@ function UnlockForm({ onDone }: { onDone: (ok: boolean) => void }) {
       if (forgot) {
         // The recovery key opens the vault, and we wrap the same vault key again with the new passphrase.
         const next = await changePassphrase(keys.record, { recoveryKey }, passphrase);
-        const saved = await api("PATCH", "/api/account/e2ee", { record: next.record });
+        if (!isCurrent()) return;
+        const saved = await api("PATCH", "/api/account/e2ee", { record: next.record, expectedWrap: keys.record.wrappedByPassphrase });
+        if (!isCurrent()) return;
         if (!saved.ok) throw new Error(saved.error);
         setUnlocked(next.vaultKey, keys.userId);
       } else {
-        setUnlocked(await unlockVault(keys.record, { passphrase }), keys.userId);
+        const key = await unlockVault(keys.record, { passphrase });
+        if (!isCurrent()) return;
+        setUnlocked(key, keys.userId);
       }
       onDone(true);
     } catch (failure) {
+      if (!isCurrent()) return;
       setError(failure instanceof WrongKeyError || failure instanceof Error ? failure.message : "Couldn’t unlock the vault.");
       setBusy(false);
     }

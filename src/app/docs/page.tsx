@@ -136,8 +136,7 @@ const sections: { id: string; title: string; body: React.ReactNode }[] = [
         <p>
           When you turn on end-to-end encryption in Settings, your browser makes a <strong>vault key</strong> and encrypts each secret value with it before
           anything is sent. The server stores only ciphertext and a copy of the vault key that is locked by your <strong>vault passphrase</strong> and by a
-          <strong> recovery key</strong>. It never receives your passphrase, your recovery key or the vault key, so it cannot read your values, even if the server
-          or the database is compromised.
+          <strong> recovery key</strong>. It never receives your passphrase, your recovery key or the vault key, so stored ciphertext and wrapped keys alone do not reveal your browser-encrypted values. This protection depends on your browser receiving trusted application code; a compromised server could send altered code that captures values or keys.
         </p>
         <Table
           head={["Topic", "How it works"]}

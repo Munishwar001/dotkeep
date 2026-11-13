@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { Download, Lock, LockOpen, ShieldCheck, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FieldDescription, FieldGroup } from "@/components/ui/field";
@@ -32,31 +32,44 @@ function SetupPanel() {
   const [created, setCreated] = useState<{ record: VaultKeyRecord; recoveryKey: string; vaultKey: CryptoKey } | null>(null);
   const [saved, setSaved] = useState(false);
   const [status, setStatus] = useState<Status>({ kind: "idle" });
-  const busy = status.kind === "saving";
+  const pending = useRef(false);
+  const [busy, setBusy] = useState(false);
 
   async function start(event: React.FormEvent) {
     event.preventDefault();
-    if (busy) return;
+    if (pending.current) return;
     const problem = checkPassphrase(passphrase);
     if (problem) return setStatus({ kind: "error", message: problem });
     if (passphrase !== confirm) return setStatus({ kind: "error", message: "The two passphrases don’t match." });
+    pending.current = true;
+    setBusy(true);
     setStatus({ kind: "saving" });
     try {
       setCreated(await createVault(passphrase)); // slow on purpose: it makes guessing the passphrase slow too
       setStatus({ kind: "idle" });
     } catch (error) {
       setStatus({ kind: "error", message: error instanceof Error ? error.message : "Couldn’t create the keys." });
+    } finally {
+      pending.current = false;
+      setBusy(false);
     }
   }
 
   async function finish() {
-    if (!created || busy) return;
+    if (!created || pending.current) return;
+    pending.current = true;
+    setBusy(true);
     setStatus({ kind: "saving" });
-    const result = await api<{ userId: string }>("POST", "/api/account/e2ee", { record: created.record });
-    if (!result.ok) return setStatus({ kind: "error", message: result.error });
-    const keys = await apiGet<{ userId: string }>("/api/account/e2ee");
-    if (keys.ok) setUnlocked(created.vaultKey, keys.data.userId);
-    router.refresh();
+    try {
+      const result = await api<{ userId: string }>("POST", "/api/account/e2ee", { record: created.record });
+      if (!result.ok) return setStatus({ kind: "error", message: result.error });
+      const keys = await apiGet<{ userId: string }>("/api/account/e2ee");
+      if (keys.ok) setUnlocked(created.vaultKey, keys.data.userId);
+      router.refresh();
+    } finally {
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
   if (created) {
@@ -115,10 +128,13 @@ function EnabledPanel() {
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [confirm, setConfirm] = useState("");
-  const busy = status.kind === "saving";
+  const pending = useRef(false);
+  const [busy, setBusy] = useState(false);
 
   async function migrate() {
-    if (busy) return;
+    if (pending.current) return;
+    pending.current = true;
+    setBusy(true);
     setStatus({ kind: "saving" });
     try {
       const legacy = await api<{ secrets: LegacySecret[] }>("POST", "/api/vault/e2ee/legacy");
@@ -156,22 +172,27 @@ function EnabledPanel() {
       );
     } catch (error) {
       setStatus({ kind: "error", message: error instanceof Error ? error.message : "Something went wrong." });
+    } finally {
+      pending.current = false;
+      setBusy(false);
     }
   }
 
   async function change(event: React.FormEvent) {
     event.preventDefault();
-    if (busy) return;
+    if (pending.current) return;
     if (!current) return setStatus({ kind: "error", message: "Enter your current passphrase." });
     const problem = checkPassphrase(next);
     if (problem) return setStatus({ kind: "error", message: problem });
     if (next !== confirm) return setStatus({ kind: "error", message: "The two new passphrases don’t match." });
+    pending.current = true;
+    setBusy(true);
     setStatus({ kind: "saving" });
     try {
       const keys = await apiGet<{ userId: string; record: VaultKeyRecord }>("/api/account/e2ee");
       if (!keys.ok) throw new Error(keys.error);
       const updated = await changePassphrase(keys.data.record, { passphrase: current }, next);
-      const saved = await api("PATCH", "/api/account/e2ee", { record: updated.record });
+      const saved = await api("PATCH", "/api/account/e2ee", { record: updated.record, expectedWrap: keys.data.record.wrappedByPassphrase });
       if (!saved.ok) throw new Error(saved.error);
       setUnlocked(updated.vaultKey, keys.data.userId);
       setMode("idle");
@@ -181,6 +202,9 @@ function EnabledPanel() {
       setStatus({ kind: "saved", message: "Passphrase changed. Your recovery key is the same." });
     } catch (error) {
       setStatus({ kind: "error", message: error instanceof Error ? error.message : "Something went wrong." });
+    } finally {
+      pending.current = false;
+      setBusy(false);
     }
   }
 
