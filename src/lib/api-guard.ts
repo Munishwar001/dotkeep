@@ -3,7 +3,7 @@ import { ObjectId } from "mongodb";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import type { Access, Actor } from "@/db/access";
-import { LimitError, NameTakenError, NotFoundError } from "@/db/errors";
+import { E2eeError, LimitError, NameTakenError, NotFoundError } from "@/db/errors";
 import { hasRecentStepUp } from "@/db/sessions";
 import type { PublicUser } from "@/db/users";
 import { isMongoConfigured } from "./mongodb";
@@ -79,6 +79,7 @@ export async function handleError(error: unknown): Promise<Response> {
   if (error instanceof NameTakenError) return apiError(error.message, 409);
   if (error instanceof LimitError) return apiError(error.message, 422);
   if (error instanceof NotFoundError) return apiError(error.message, 404);
+  if (error instanceof E2eeError) return NextResponse.json({ error: error.message, code: error.code }, { status: 409, headers: noStore });
   await logError(error, "vault api error");
   return apiError("Something went wrong. Please try again.", 500);
 }

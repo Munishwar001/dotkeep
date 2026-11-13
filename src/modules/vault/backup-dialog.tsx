@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { api } from "./client-api";
 import { LIMITS } from "./constants";
+import { mergeBackup, type EncryptedBackupSecret } from "@/modules/e2ee/export-merge";
 import { download } from "./env-transfer-dialog";
 
 export type BackupMode = "export" | "restore";
@@ -77,11 +78,24 @@ function BackupForm({ mode, onDone }: { mode: BackupMode; onDone: () => void }) 
       return;
     }
 
-    const result = await api<{ content: string; projects: number; secrets: number }>("POST", "/api/vault/backup/export");
+    const result = await api<{ content: string; projects: number; secrets: number; encrypted?: EncryptedBackupSecret[] }>("POST", "/api/vault/backup/export");
+    if (!result.ok) {
+      setPending(false);
+      return setError(result.error);
+    }
+    if (result.data.secrets === 0) {
+      setPending(false);
+      return setError("Your vault has no secrets to back up yet.");
+    }
+    let file: string;
+    try {
+      file = await mergeBackup(result.data.content, result.data.encrypted ?? []); // opens the end-to-end ones, here in the browser
+    } catch (failure) {
+      setPending(false);
+      return setError(failure instanceof Error ? failure.message : "Couldn’t decrypt the end-to-end secrets.");
+    }
     setPending(false);
-    if (!result.ok) return setError(result.error);
-    if (result.data.secrets === 0) return setError("Your vault has no secrets to back up yet.");
-    download(result.data.content, `dotkeep-backup-${new Date().toISOString().slice(0, 10)}.json`, "application/json");
+    download(file, `dotkeep-backup-${new Date().toISOString().slice(0, 10)}.json`, "application/json");
     setNotice(
       `Downloaded ${result.data.secrets} ${result.data.secrets === 1 ? "secret" : "secrets"} from ${result.data.projects} ${result.data.projects === 1 ? "project" : "projects"}. The file holds real values and isn’t encrypted, so keep it safe and don’t commit it.`,
     );

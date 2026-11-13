@@ -8,7 +8,8 @@
  * - `context` (userId + secretId) is mixed in as "additional authenticated data". A ciphertext copied onto
  *   another secret or another user's record will therefore refuse to decrypt.
  *
- * This is server-side encryption, not end-to-end: the server holds the key and can decrypt.
+ * This is server-side encryption, not end-to-end: the server holds the key and can decrypt. Accounts that turn on end-to-end
+ * encryption store "e1$" values made in the browser instead (src/lib/e2ee.ts), which the server cannot open.
  *
  * Stored format:  v1$<iv, base64>$<auth tag, base64>$<ciphertext, base64>
  */

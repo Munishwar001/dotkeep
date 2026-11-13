@@ -1,5 +1,6 @@
 import { DashShell } from "@/modules/dashboard/shell";
 import { Sidebar } from "@/modules/dashboard/sidebar";
+import { UnlockDialog } from "@/modules/e2ee/unlock-dialog";
 import { StepUpDialog } from "@/modules/vault/step-up-dialog";
 
 // Every dashboard page depends on the session and the database, so there is nothing worth prefetching. Without this,
@@ -12,6 +13,7 @@ export default function DashboardLayout({ children }: LayoutProps<"/dashboard">)
     <DashShell sidebar={<Sidebar />}>
       {children}
       <StepUpDialog />
+      <UnlockDialog />
     </DashShell>
   );
 }

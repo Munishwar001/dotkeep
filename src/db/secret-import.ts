@@ -5,12 +5,13 @@
  * core: the whole-vault backup (vault-backup.ts) uses it too, with entries that carry their own environment.
  */
 import type { ObjectId } from "mongodb";
+import { isE2eeValue } from "@/lib/e2ee";
 import { decryptSecret } from "@/lib/vault-crypto";
 import { ENV_NAME, type EnvEntry } from "@/lib/dotenv";
 import { LIMITS, type Environment, type SecretType } from "@/modules/vault/constants";
 import type { Actor } from "./access";
 import { collections, keyOf } from "./collections";
-import { LimitError, NameTakenError } from "./errors";
+import { E2eeError, LimitError, NameTakenError } from "./errors";
 import { logEvents } from "./secret-events";
 import { contextOf, createSecret, eventOf, updateSecret, type Patch } from "./secrets";
 
@@ -65,6 +66,8 @@ export async function importEntries(
         result.created += 1;
       } else if (!options.overwrite) {
         result.skipped += 1;
+      } else if (isE2eeValue(current.valueEncrypted)) {
+        result.failed.push({ name, error: "This secret is end-to-end encrypted, so an import can’t overwrite it." });
       } else {
         const patch: Patch = {};
         if (decryptSecret(current.valueEncrypted, contextOf(userId, current._id)) !== value) patch.value = value; // the same value gets no new version
@@ -80,6 +83,11 @@ export async function importEntries(
     } catch (error) {
       if (error instanceof LimitError) {
         result.failed.push({ name, error: error.message });
+        break; // every further one would fail the same way
+      }
+      if (error instanceof E2eeError) {
+        // Importing a file means the server would see the values, which an end-to-end account doesn't allow.
+        result.failed.push({ name, error: "Your account uses end-to-end encryption, so importing from a file isn’t available yet." });
         break; // every further one would fail the same way
       }
       if (error instanceof NameTakenError) result.failed.push({ name, error: error.message });
@@ -99,21 +107,26 @@ export async function importSecrets(
   return importEntries(userId, actor, input.projectId, entries, { overwrite: input.overwrite, source: input.source });
 }
 
+/** An end-to-end secret on its way out: still encrypted, the browser opens it with the vault key. */
+export type EncryptedExport = { id: string; name: string; cipher: string };
+
 /**
  * Decrypts every secret of a project in one environment, for a download. Null when the project isn't yours.
+ * End-to-end secrets can't be opened here, so they come back separately as `encrypted`.
  * `envNamesOnly` leaves out names that can't be a variable name (a .env file can't hold them; JSON can).
  */
 export async function exportSecrets(
   userId: ObjectId,
   actor: Actor,
   input: { projectId: ObjectId; environment: Environment; envNamesOnly: boolean; destination: string },
-): Promise<{ entries: EnvEntry[]; skipped: string[]; projectName: string } | null> {
+): Promise<{ entries: EnvEntry[]; encrypted: EncryptedExport[]; skipped: string[]; projectName: string } | null> {
   const { projects, secrets } = await collections();
   const project = await projects.findOne({ _id: input.projectId, userId }, { projection: { name: 1 } });
   if (!project) return null;
 
   const docs = await secrets.find({ userId, projectId: input.projectId, environment: input.environment }).sort({ nameKey: 1 }).toArray();
   const entries: EnvEntry[] = [];
+  const encrypted: EncryptedExport[] = [];
   const skipped: string[] = [];
   const exported = [];
   for (const doc of docs) {
@@ -121,9 +134,10 @@ export async function exportSecrets(
       skipped.push(doc.name); // e.g. a name with spaces can't be a variable name
       continue;
     }
-    entries.push({ name: doc.name, value: decryptSecret(doc.valueEncrypted, contextOf(userId, doc._id)) });
+    if (isE2eeValue(doc.valueEncrypted)) encrypted.push({ id: doc._id.toString(), name: doc.name, cipher: doc.valueEncrypted });
+    else entries.push({ name: doc.name, value: decryptSecret(doc.valueEncrypted, contextOf(userId, doc._id)) });
     exported.push(eventOf(doc, actor, "exported", `to ${input.destination}`));
   }
   await logEvents(userId, exported);
-  return { entries, skipped, projectName: project.name };
+  return { entries, encrypted, skipped, projectName: project.name };
 }

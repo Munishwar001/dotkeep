@@ -9,6 +9,7 @@ import type { PublicEvent } from "@/db/secret-events";
 import type { PublicSecret } from "@/db/secrets";
 import type { PublicVersion } from "@/db/secret-history";
 import { ActivityList } from "./activity-list";
+import { openValue } from "@/modules/e2ee/vault-key";
 import { api, apiGet } from "./client-api";
 import { formatDateTime } from "./format";
 
@@ -87,13 +88,21 @@ function HistoryBody({ secret, revealSeconds, canRestore, onRestored }: { secret
   async function fetchValue(versionId: string): Promise<string | null> {
     setBusyId(versionId);
     setError(null);
-    const result = await api<{ value: string }>("POST", `/api/vault/secrets/${secret.id}/versions/${versionId}/reveal`);
-    setBusyId(null);
+    const result = await api<{ value?: string; cipher?: string }>("POST", `/api/vault/secrets/${secret.id}/versions/${versionId}/reveal`);
     if (!result.ok) {
+      setBusyId(null);
       setError(result.error);
       return null;
     }
-    return result.data.value;
+    try {
+      // End-to-end history comes back encrypted and is opened here, in the browser.
+      return result.data.cipher !== undefined ? await openValue(secret.id, result.data.cipher) : (result.data.value ?? "");
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Couldn’t decrypt this value.");
+      return null;
+    } finally {
+      setBusyId(null);
+    }
   }
 
   async function toggleReveal(versionId: string) {

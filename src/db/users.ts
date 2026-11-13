@@ -9,6 +9,7 @@
  */
 import { logError } from "@/lib/logger";
 import type { Collection, ObjectId } from "mongodb";
+import type { VaultKeyRecord } from "@/lib/e2ee";
 import { getDb } from "@/lib/mongodb";
 import { REVEAL_SECONDS } from "@/modules/vault/constants";
 import { recordLoginEvent } from "./login-events";
@@ -46,6 +47,9 @@ export type UserDoc = {
   twoFactorPending?: { secret: string; createdAt: Date };
   // Opt-in (Settings): ask for a 2FA code before secret values are revealed or exported. Only meaningful while twoFactor is on.
   secretsNeedCode?: boolean;
+  // End-to-end encryption (Settings -> End-to-end encryption). Missing = off. Only wrapped keys live here: the passphrase and
+  // the recovery key never reach the server. See src/lib/e2ee.ts and src/db/vault-keys.ts.
+  vaultKeys?: VaultKeyRecord;
 };
 
 export type Role = "user" | "admin";
@@ -54,7 +58,7 @@ export type Role = "user" | "admin";
 export type NewUser = { name: string; email: string; passwordHash: string };
 
 /** A user that is safe to send to the browser: no password hash. */
-export type PublicUser = { id: string; name: string; email: string; role: Role; revealSeconds: number; emailVerified: boolean; maskEmails: boolean; twoFactorEnabled: boolean; secretsNeedCode: boolean; createdAt: Date };
+export type PublicUser = { id: string; name: string; email: string; role: Role; revealSeconds: number; emailVerified: boolean; maskEmails: boolean; twoFactorEnabled: boolean; secretsNeedCode: boolean; e2eeEnabled: boolean; createdAt: Date };
 
 /** Thrown by createUser() when the email is already registered. */
 export class EmailTakenError extends Error {
@@ -80,7 +84,7 @@ export function isEmailVerified(user: Pick<UserDoc, "emailVerified">): boolean {
 
 /** Strips the password hash. Always use this before returning a user to the browser. */
 export function toPublicUser(user: UserDoc): PublicUser {
-  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", revealSeconds: user.revealSeconds ?? REVEAL_SECONDS, emailVerified: isEmailVerified(user), maskEmails: user.maskEmails === true, twoFactorEnabled: user.twoFactor !== undefined, secretsNeedCode: user.twoFactor !== undefined && user.secretsNeedCode === true, createdAt: user.createdAt };
+  return { id: user._id.toString(), name: user.name, email: user.email, role: user.role ?? "user", revealSeconds: user.revealSeconds ?? REVEAL_SECONDS, emailVerified: isEmailVerified(user), maskEmails: user.maskEmails === true, twoFactorEnabled: user.twoFactor !== undefined, secretsNeedCode: user.twoFactor !== undefined && user.secretsNeedCode === true, e2eeEnabled: user.vaultKeys !== undefined, createdAt: user.createdAt };
 }
 
 // The unique index on `email` is what really stops two accounts with the same email, even if two

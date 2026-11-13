@@ -7,7 +7,7 @@ import { rateLimit } from "@/lib/request-guard";
 
 type Context = { params: Promise<{ id: string }> };
 
-// POST /api/vault/secrets/:id/reveal  ->  { value }. This is the ONLY place a stored value is decrypted and sent out.
+// POST /api/vault/secrets/:id/reveal  ->  { value }, or { cipher } for an end-to-end secret (the browser opens it). This is the ONLY place a stored value is decrypted and sent out.
 // It is a POST (not a GET) so the same-origin check applies, and it is rate limited so a stolen session
 // can't quietly pull out every secret.
 export async function POST(request: Request, { params }: Context) {
@@ -31,8 +31,8 @@ export async function POST(request: Request, { params }: Context) {
     const access = await secretAccess(auth.userId, id);
     const denied = requireRole(access, "read", "Secret not found.");
     if (denied || !access) return denied!;
-    const value = await revealSecret(access.ownerId, auth.actor, id);
-    return value === null ? apiError("Secret not found.", 404) : NextResponse.json({ value }, { headers: noStore });
+    const revealed = await revealSecret(access.ownerId, auth.actor, id);
+    return revealed === null ? apiError("Secret not found.", 404) : NextResponse.json(revealed, { headers: noStore });
   } catch (error) {
     return handleError(error);
   }

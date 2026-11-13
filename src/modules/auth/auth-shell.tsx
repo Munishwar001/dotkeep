@@ -65,7 +65,7 @@ export function AuthShell({ mode, children }: { mode: Mode; children: React.Reac
           <p className="auth-switch">{c.switchText} <Link href={c.switchHref}>{c.switchLabel}</Link></p>
         </main>
 
-        <footer className="auth-foot">© 2026 Dotkeep <span>·</span> Early days. A thoughtful foundation.</footer>
+        <footer className="auth-foot">© 2026 Dotkeep <span>·</span> <Link href="/privacy">Privacy</Link> <span>·</span> <Link href="/terms">Terms</Link></footer>
       </div>
 
       <aside className="auth-panel" aria-hidden="true">

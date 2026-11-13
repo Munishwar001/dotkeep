@@ -50,7 +50,7 @@ Secrets end up in chat messages, notes and loose `.env` files. Dotkeep gives the
 | CSRF | Same-origin checks on state-changing requests, JSON only |
 | Server-side validation | All input and limits are enforced on the server |
 
-> **Not end-to-end encrypted.** Values are encrypted on the server with a key the server holds, so the server can decrypt them when you reveal one. This protects you if the database leaks, but not if the server itself is compromised. Use 2FA and *Protect secret values* for extra protection, and treat the encryption key as the crown jewels.
+> **End-to-end encryption is opt-in (Settings), not the default.** By default, values are encrypted on the server with a key the server holds, so the server can decrypt them when you reveal one. With end-to-end encryption on, your browser encrypts values with a vault key protected by a passphrase (PBKDF2-SHA256 → AES-256-GCM) and a recovery key, and the server only stores ciphertext. Shared projects, .env import and backup restore stay server-side or unavailable while it is on; see the docs. The server-side default protects you if the database leaks, but not if the server itself is compromised. Use 2FA and *Protect secret values* for extra protection, and treat the encryption key as the crown jewels.
 
 ## Tech stack
 
