@@ -25,9 +25,8 @@ with an audit trail and per-project sharing. Optional end-to-end encryption mean
 ## Demo
 
 <div align="center">
-  <video src="docs/dotkeep-promo-1080p60.mp4" controls muted playsinline width="100%">
-    Your viewer can't play the video here.
-    <a href="docs/dotkeep-promo-1080p60.mp4">Watch the product video</a>.
+  <video src="https://github.com/user-attachments/assets/5db66581-df0d-4eb1-ab9c-a860a5d66bbc" controls muted playsinline width="640">
+    <a href="https://github.com/user-attachments/assets/5db66581-df0d-4eb1-ab9c-a860a5d66bbc">Watch the product video</a>
   </video>
 </div>
 
