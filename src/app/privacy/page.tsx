@@ -51,7 +51,13 @@ const sections: LegalSection[] = [
         <h3>Cookies</h3>
         <p>
           Dotkeep sets one essential cookie that keeps you signed in. It is HTTP-only, so page scripts cannot read it. We do not use advertising
-          or tracking cookies, and we do not run third-party analytics.
+          or tracking cookies.
+        </p>
+        <h3>Analytics</h3>
+        <p>
+          On our public pages (the home page, docs, sign-in and sign-up) we use Vercel Web Analytics to count page views and see where visitors come
+          from. It sets no cookie and does not follow you across other sites. We send only the page address, with anything after the page path removed.
+          It does not run inside your dashboard, and it is never sent your secrets, your account details or the links in your emails.
         </p>
       </>
     ),
@@ -93,7 +99,7 @@ const sections: LegalSection[] = [
         <p>We do not sell or rent your information. It is shared only in these cases:</p>
         <ul>
           <li><strong>People you choose.</strong> When you share a project, its members can see that project’s secrets according to their role, and the activity in it.</li>
-          <li><strong>Service providers.</strong> Our database host and our email provider process data on our behalf, only to run Dotkeep.</li>
+          <li><strong>Service providers.</strong> Our hosting and analytics provider (Vercel), our database host and our email provider process data on our behalf, only to run Dotkeep.</li>
           <li><strong>Legal requirements.</strong> If we are legally required to disclose information, we will do so only to the extent needed. Because values are encrypted, we hold them only in encrypted form.</li>
         </ul>
       </>
