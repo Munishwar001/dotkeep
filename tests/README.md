@@ -1,3 +1,7 @@
+<!-- coderabbit-ai-generated:v1 -->
+
+<!-- coderabbit-ai-generated-section:v1:478e79444de06f0494907d43b34dfadc2bc25dc6da6aaeb470d194287f16fb5e -->
+
 # Tests
 
 ```bash
@@ -15,15 +19,16 @@ Uses Node's built-in test runner. No extra packages.
 | `tests/api/vault.test.mjs` | `.env` import/export, version history, move, bulk edit/delete, audit log, other users can't touch any of it | server + MongoDB |
 | `tests/api/sharing.test.mjs` | Project sharing: owner / editor / viewer / outsider, 404 vs 403, moving between owners, who sees the audit log | server + MongoDB |
 | `tests/api/two-factor.test.mjs` | 2FA: setup, the code step at login, replay and 5-wrong-codes limits, recovery codes, turning it off | server + MongoDB |
-| `tests/api/security.test.mjs` | Attacker's view: every protected API route refuses anonymous callers, CSRF (origin / content type), cookie flags, login enumeration and brute-force lockout, logout and expired sessions, no secret value or hash in any response or audit log, ciphertext only in the database, guessed ids, NoSQL operators and malformed input, mass assignment, admin routes, security headers. Regression checks only: not a substitute for an independent penetration test | server + MongoDB |
+| `tests/api/security.test.mjs` | Attacker's view: the protected API routes listed in `PROTECTED` refuse anonymous callers, CSRF (origin / content type), cookie flags, login enumeration and brute-force lockout, logout and expired sessions, no secret values in the selected list and activity responses, no password hashes in checked responses; authorized reveal responses may contain plaintext, ciphertext only in the database, guessed ids, NoSQL operators and malformed input, mass assignment, admin routes, security headers. Regression checks only: not a substitute for an independent penetration test | server + MongoDB |
 | `tests/unit/e2ee.test.mjs` | End-to-end crypto (`src/lib/e2ee.ts`): passphrase and recovery key, changing the passphrase, values bound to their owner and secret, tampering | nothing |
-| `tests/api/e2ee.test.mjs` | End-to-end encryption on the server: key setup, ciphertext-only storage, history and restore, plaintext refused for end-to-end accounts, sharing rules, migration of existing secrets, exports, changing the passphrase | server + MongoDB |
+| `tests/api/e2ee.test.mjs` | End-to-end encryption on the server: key setup, ciphertext-only storage, history and restore, plaintext refused for end-to-end accounts in unshared projects (shared projects accept plaintext), sharing rules, migration of existing secrets, exports, changing the passphrase | server + MongoDB |
 | `tests/api/admin.test.mjs` | Admin block / unblock / delete, guards (self, other admins), email masking on the server | server + MongoDB |
 
 ## Running the API tests
 
-1. Start the app: `npm run dev` (port 3000, or set `TEST_BASE_URL`).
-2. `npm test` (it loads `.env.local` for `MONGODB_URI`, `MONGODB_DB` and talks to the same database as the server).
+1. Use MongoDB Atlas or a local replica set (for example `mongodb://localhost:27017/?replicaSet=rs0`). Secret writes and migration require transactions; standalone MongoDB is not supported.
+2. Start the app: `npm run dev` (port 3000, or set `TEST_BASE_URL`).
+3. `npm test` (it loads `.env.local` for `MONGODB_URI`, `MONGODB_DB` and talks to the same database as the server).
 
 Each suite creates its own users (`e2e-…@example.com`), signs them in with a session written straight to the database
 (so signup and login rate limits don't get in the way), and deletes the users and everything they own when it
@@ -38,3 +43,6 @@ checks go through `user.page()`, which retries a few times.
 - Pure functions: add `tests/unit/<name>.test.mjs`. Importing `src/lib/*.ts` works directly (Node strips the types),
   as long as the file doesn't use the `@/` alias.
 - API behaviour: copy the shape of `tests/api/sharing.test.mjs` and use `createWorld()` from `tests/helpers.mjs`.
+
+
+<!-- /coderabbit-ai-generated:v1 -->

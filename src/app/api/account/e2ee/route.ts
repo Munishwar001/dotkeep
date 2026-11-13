@@ -49,12 +49,15 @@ export async function PATCH(request: Request) {
   const auth = await authorize(request, { mutating: true, vault: false });
   if (auth instanceof Response) return auth;
 
-  const parsed = parseVaultRecord(await request.json().catch(() => null));
+  const body = await request.json().catch(() => null);
+  const parsed = parseVaultRecord(body);
+  const expectedWrap = body?.expectedWrap;
+  if (typeof expectedWrap !== "string" || !expectedWrap || expectedWrap.length > 1000) return apiError("Reload your keys and try again.", 409);
   if (!parsed.ok) return apiError(parsed.error, 400);
   const slow = await limited(auth.userId.toString()); // after the shape check, so a typo doesn't use up the tries
   if (slow) return slow;
   try {
-    if (!(await replacePassphraseWrap(auth.userId, parsed.record))) return apiError("Your keys changed. Reload the page and try again.", 409);
+    if (!(await replacePassphraseWrap(auth.userId, parsed.record, expectedWrap))) return apiError("Your keys changed. Reload the page and try again.", 409);
     return NextResponse.json({ ok: true }, { headers: noStore });
   } catch (error) {
     return handleError(error);

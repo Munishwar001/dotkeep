@@ -3,11 +3,13 @@
  * except removeMember, which a member may also use to leave a project.
  * People are found by the email of an existing, verified Dotkeep account.
  */
-import { ObjectId } from "mongodb";
+import { ObjectId, type ClientSession } from "mongodb";
 import { collections, type MemberRole } from "./collections";
 import { E2eeError, isDuplicateKeyError, LimitError, NotFoundError } from "./errors";
 import { findUserByEmail, isEmailVerified, usersCollection } from "./users";
 import { projectHasE2eeSecrets } from "./vault-keys";
+
+import { guardProject, transaction } from "./project-transaction";
 
 export const MAX_MEMBERS = 20;
 
@@ -34,6 +36,11 @@ export async function listMembers(ownerId: ObjectId, projectId: ObjectId): Promi
 
 /** Shares the project, or changes the role if the person already has access. */
 export async function addMember(ownerId: ObjectId, projectId: ObjectId, input: { email: string; role: MemberRole }): Promise<PublicMember> {
+  return transaction((session) => addMemberInTransaction(ownerId, projectId, input, session));
+}
+
+async function addMemberInTransaction(ownerId: ObjectId, projectId: ObjectId, input: { email: string; role: MemberRole }, session: ClientSession): Promise<PublicMember> {
+  await guardProject(ownerId, projectId, session);
   const { members } = await collections();
   const person = await findUserByEmail(input.email);
   if (!person || !isEmailVerified(person)) {
@@ -41,12 +48,12 @@ export async function addMember(ownerId: ObjectId, projectId: ObjectId, input: {
   }
   if (person._id.equals(ownerId)) throw new LimitError("You already own this project.");
   // End-to-end secrets can be opened only with the owner's vault key, so a member would see secrets they can't read.
-  if (await projectHasE2eeSecrets(projectId)) {
+  if (await projectHasE2eeSecrets(projectId, session)) {
     throw new E2eeError("This project has end-to-end encrypted secrets, so it can’t be shared yet. Move them to another project first.", "e2ee_unavailable");
   }
 
-  const existing = await members.findOne({ projectId, userId: person._id }, { projection: { _id: 1 } });
-  if (!existing && (await members.countDocuments({ projectId })) >= MAX_MEMBERS) {
+  const existing = await members.findOne({ projectId, userId: person._id }, { projection: { _id: 1 }, session });
+  if (!existing && (await members.countDocuments({ projectId }, { session })) >= MAX_MEMBERS) {
     throw new LimitError(`A project can be shared with up to ${MAX_MEMBERS} people.`);
   }
 
@@ -55,7 +62,7 @@ export async function addMember(ownerId: ObjectId, projectId: ObjectId, input: {
     await members.updateOne(
       { projectId, userId: person._id },
       { $set: { role: input.role, ownerId }, $setOnInsert: { _id: new ObjectId(), createdAt: now } },
-      { upsert: true },
+      { upsert: true, session },
     );
   } catch (error) {
     if (!isDuplicateKeyError(error)) throw error; // two invites at once: the other one won, which is fine

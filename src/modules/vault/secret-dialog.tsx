@@ -74,7 +74,14 @@ function SecretForm({ projects: allProjects, defaultProjectId, secret, prefill, 
 
     // End-to-end: for an account that uses it, a value in a project that is not shared is encrypted here, in the browser, and the
     // server only ever receives ciphertext. Shared projects keep server-side encryption so teammates can read them.
-    const status = await e2eeStatus();
+    let status;
+    try {
+      status = await e2eeStatus();
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Couldn’t check encryption status. Try again.");
+      setPending(false);
+      return;
+    }
     const target = allProjects.find((project) => project.id === projectId);
     const endToEnd = status.enabled && target?.ownerId === status.userId && !target.memberCount;
     if (secret && value && endToEnd && !secret.e2ee) {

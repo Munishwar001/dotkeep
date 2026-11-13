@@ -7,6 +7,7 @@ import { getDb } from "@/lib/mongodb";
 import type { Environment, SecretType } from "@/modules/vault/constants";
 
 export type ProjectDoc = {
+  writeRevision?: number;
   _id: ObjectId;
   userId: ObjectId; // the owner. Every query filters on this.
   name: string;

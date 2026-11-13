@@ -192,6 +192,29 @@ describe("sharing", () => {
     assert.equal(bulk.data.failed.length, 1);
   });
 
+  it("refuses single and bulk moves of server-encrypted values into an E2EE destination", async () => {
+    const created = await owner.call("POST", "/api/vault/secrets", { projectId: sharedProject.id, name: "PLAIN_MOVE", value: "plain", environment: "local", type: "other" });
+    assert.equal(created.status, 201);
+    const id = created.data.secret.id;
+    assert.equal((await owner.call("PATCH", `/api/vault/secrets/${id}`, { projectId: project.id })).data.code, "e2ee_required");
+    const bulk = await owner.call("POST", "/api/vault/secrets/bulk", { action: "update", ids: [id], projectId: project.id });
+    assert.equal(bulk.data.updated, 0);
+    assert.equal(bulk.data.failed.length, 1);
+  });
+
+  it("serializes sharing with encrypted writes", async () => {
+    for (let i = 0; i < 4; i++) {
+      const p = (await owner.call("POST", "/api/vault/projects", { name: `Race ${i}` })).data.project;
+      const [write, share] = await Promise.all([
+        createE2ee(owner, p.id, "RACE", "value"),
+        owner.call("POST", `/api/vault/projects/${p.id}/members`, { email: member.email, role: "viewer" }),
+      ]);
+      assert.ok([201, 409].includes(write.response.status));
+      assert.ok([201, 409].includes(share.status));
+      assert.notDeepEqual([write.response.status, share.status], [201, 201]);
+    }
+  });
+
   it("a project with end-to-end secrets can't be shared", async () => {
     const r = await owner.call("POST", `/api/vault/projects/${project.id}/members`, { email: member.email, role: "viewer" });
     assert.deepEqual([r.status, r.data.code], [409, "e2ee_unavailable"]);
@@ -275,20 +298,72 @@ describe("moving existing secrets", () => {
 describe("changing the passphrase", () => {
   it("replaces only the passphrase wrap, and the recovery key keeps working", async () => {
     const next = await changePassphrase(record, { passphrase: PASSPHRASE }, "a brand new passphrase", ITERATIONS);
-    assert.equal((await owner.call("PATCH", "/api/account/e2ee", { record: next.record })).status, 200);
+    assert.equal((await owner.call("PATCH", "/api/account/e2ee", { record: next.record, expectedWrap: record.wrappedByPassphrase })).status, 200);
     const got = (await owner.call("GET", "/api/account/e2ee")).data.record;
     await unlockVault(got, { passphrase: "a brand new passphrase" });
     await unlockVault(got, { recoveryKey });
     await assert.rejects(unlockVault(got, { passphrase: PASSPHRASE }));
   });
 
+  it("rejects a stale passphrase change without replacing the saved wrap", async () => {
+    const before = (await owner.call("GET", "/api/account/e2ee")).data.record;
+    const stale = await changePassphrase(record, { recoveryKey }, "another new passphrase", ITERATIONS);
+    assert.equal((await owner.call("PATCH", "/api/account/e2ee", { record: stale.record, expectedWrap: record.wrappedByPassphrase })).status, 409);
+    assert.deepEqual((await owner.call("GET", "/api/account/e2ee")).data.record, before);
+  });
+
   it("refuses a record that would swap the recovery wrap", async () => {
     const other = await createVault("some other passphrase here", ITERATIONS);
-    assert.equal((await owner.call("PATCH", "/api/account/e2ee", { record: other.record })).status, 409);
+    assert.equal((await owner.call("PATCH", "/api/account/e2ee", { record: other.record, expectedWrap: (await owner.call("GET", "/api/account/e2ee")).data.record.wrappedByPassphrase })).status, 409);
     await unlockVault((await owner.call("GET", "/api/account/e2ee")).data.record, { recoveryKey });
   });
 
   it("is refused for an account without end-to-end encryption", async () => {
-    assert.equal((await member.call("PATCH", "/api/account/e2ee", { record })).status, 409);
+    assert.equal((await member.call("PATCH", "/api/account/e2ee", { record, expectedWrap: record.wrappedByPassphrase })).status, 409);
+  });
+});
+
+describe("migration synchronization and throttling", () => {
+  it("serializes migration with membership and moves", async () => {
+    for (const action of ["share", "move"]) {
+      const user = await world.user(`race-${action}`);
+      const p = (await user.call("POST", "/api/vault/projects", { name: "Source" })).data.project;
+      const target = (await user.call("POST", "/api/vault/projects", { name: "Target" })).data.project;
+      await user.call("POST", `/api/vault/projects/${target.id}/members`, { email: member.email, role: "viewer" });
+      const secret = (await user.call("POST", "/api/vault/secrets", { projectId: p.id, name: "OLD", value: "old", environment: "local", type: "other" })).data.secret;
+      await user.call("PATCH", `/api/vault/secrets/${secret.id}`, { value: "new" });
+      await user.call("POST", "/api/account/e2ee", { record });
+      const snapshot = (await user.call("POST", "/api/vault/e2ee/legacy", {})).data.secrets[0];
+      const item = { id: secret.id, cipher: await seal(user, secret.id, snapshot.value), versions: await Promise.all(snapshot.versions.map(async v => ({ id: v.id, cipher: await seal(user, secret.id, v.value) }))) };
+      const [migration, competing] = await Promise.all([
+        user.call("POST", "/api/vault/e2ee/migrate", { items: [item] }),
+        action === "share" ? user.call("POST", `/api/vault/projects/${p.id}/members`, { email: member.email, role: "viewer" }) : user.call("PATCH", `/api/vault/secrets/${secret.id}`, { projectId: target.id }),
+      ]);
+      assert.equal(migration.status, 200);
+      assert.ok([200, 201, 409].includes(competing.status));
+      const stored = await world.db.collection("secrets").findOne({ _id: new world.ObjectId(secret.id) });
+      if (migration.data.migrated) {
+        assert.equal(competing.status, 409);
+        assert.match(stored.valueEncrypted, /^e1\$/);
+        const history = await world.db.collection("secret_versions").find({ secretId: stored._id }).toArray();
+        assert.equal(history.length, 1);
+        assert.ok(history.every(v => v.valueEncrypted.startsWith("e1$")));
+      } else {
+        assert.equal(migration.data.failed.length, 1);
+        assert.ok(!stored.valueEncrypted.startsWith("e1$"));
+      }
+    }
+  });
+
+  it("throttles before parsing the migration body, with Retry-After", async () => {
+    const user = await world.user("throttled");
+    await world.db.collection("rateLimits").insertOne({ _id: `e2ee-migrate:${user.id}`, count: 30, resetAt: new Date(Date.now() + 60_000), expiresAt: new Date(Date.now() + 60_000) });
+    try {
+      const response = await user.call("POST", "/api/vault/e2ee/migrate", { invalid: true }, true);
+      assert.equal(response.status, 429);
+      assert.ok(Number(response.headers.get("Retry-After")) > 0);
+    } finally {
+      await world.db.collection("rateLimits").deleteOne({ _id: `e2ee-migrate:${user.id}` });
+    }
   });
 });

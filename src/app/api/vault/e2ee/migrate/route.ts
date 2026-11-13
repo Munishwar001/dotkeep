@@ -5,6 +5,8 @@ import { userHasE2ee } from "@/db/vault-keys";
 import { apiError, authorize, handleError, noStore } from "@/lib/api-guard";
 import { E2EE_VALUE_PATTERN } from "@/lib/e2ee";
 
+import { rateLimit } from "@/lib/request-guard";
+
 const BATCH = 50;
 const MAX_VERSIONS = 20;
 const MAX_CIPHER = 70_000;
@@ -37,10 +39,13 @@ export async function POST(request: Request) {
   const auth = await authorize(request, { mutating: true });
   if (auth instanceof Response) return auth;
 
-  const items = parseItems(await request.json().catch(() => null));
-  if (!items) return apiError("That request isn’t valid.", 400);
-
   try {
+    const limit = await rateLimit(`e2ee-migrate:${auth.userId}`, 30, 15 * 60 * 1000);
+    if (!limit.ok) return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429, headers: { ...noStore, "Retry-After": String(limit.retryAfter) } });
+
+    const items = parseItems(await request.json().catch(() => null));
+    if (!items) return apiError("That request isn’t valid.", 400);
+
     if (!(await userHasE2ee(auth.userId))) return apiError("Turn on end-to-end encryption first.", 409);
     return NextResponse.json(await migrateSecrets(auth.userId, auth.actor, items), { headers: noStore });
   } catch (error) {

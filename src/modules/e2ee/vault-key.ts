@@ -40,15 +40,19 @@ export function setUnlocked(key: CryptoKey, userId: string) {
   notify();
 }
 
-/**
- * Whether this account uses end-to-end encryption, and its user id. Asked once and remembered. If the answer cannot be fetched, it says
- * "off", which is safe: the server refuses a plain value from an end-to-end account anyway.
- */
+/** Only successful status lookups are cached. A failed lookup must stop secret submission. */
 let status: Promise<{ enabled: boolean; userId: string | null }> | null = null;
 export function e2eeStatus() {
-  status ??= apiGet<{ enabled: boolean; userId: string; record: VaultKeyRecord | null }>("/api/account/e2ee").then((result) =>
-    result.ok ? { enabled: result.data.enabled, userId: result.data.userId } : { enabled: false, userId: null },
-  );
+  if (!status) {
+    const lookup = apiGet<{ enabled: boolean; userId: string; record: VaultKeyRecord | null }>("/api/account/e2ee").then((result) => {
+      if (!result.ok) throw new Error(result.error);
+      return { enabled: result.data.enabled, userId: result.data.userId };
+    }).catch((error) => {
+      if (status === lookup) status = null;
+      throw error;
+    });
+    status = lookup;
+  }
   return status;
 }
 
